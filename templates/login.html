@@ -1,5 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!-->
+<html class="no-js wf-raleway-n4-active wf-raleway-n8-active wf-raleway-n3-active wf-active" lang="en">
+<!--<![endif]-->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width,minimum-scale=1.0,maximum-scale=1.0">
@@ -12,9 +17,9 @@
     <title>Login | NUAST Student Portal</title>
     <meta name="theme-color" content="#ffda00">
 
-    <link rel="stylesheet" href="https://nuast.org.uk/css/main.css?v=10">
+    <link rel="stylesheet" href="/css/main.css">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway:300,400,800" media="all">
-    <link href="https://nuast.org.uk/css/site-icons.css" rel="stylesheet">
+    <link href="/css/site-icons.css" rel="stylesheet">
 
     <style type="text/css">
         .banner {background-image: url('/img/banner_home_2018.jpg');}
@@ -60,7 +65,8 @@
         .news-item.i3 .news-text:before {background: linear-gradient(rgba(85,87,89,0),rgba(85,87,89,1));}
         }
 
-        .row.boxes>div>div h3 {font-family: Raleway;}
+        .row.boxes>div>div h3 {
+            font-family: Raleway, sans-serif;}
 
         @media (max-width: 767px) {
         .down-arrow {display: none;}
@@ -76,17 +82,16 @@
         }
     </style>
 </head>
-<body>
+<body id="home" class="no-touch">
 <div id="header">
     <div class="header_bar header_bar1">
         <div class="container">
             <a id="header_badge" href="/" data-toggle="tooltip" data-placement="bottom" title data-original-title="NUAST">
-                <div class="icon icon-NUAST-Molecule icon-header">
-                </div>
+                <div class="icon icon-NUAST-Molecule icon-header"></div>
             </a>
-            <img id="header_text" src="https://nuast.org.uk/img/header_text.svg" alt="NUAST">
+            <img id="header_text" src="/img/header_text.svg" alt="NUAST">
             <ul class="header_icons">
-                <li class="visible-xs" id="menu_link">
+                <li class="visible-xs" id="menu_link"> <!-- "menu_link" becomes "menu_cross" when clicked, and ul id="menu1" changes to "display: block;". This is the button for the mobile hamburger menu. -->
                     <a href="#">
                         <i class="icon-menu"></i>
                     </a>
@@ -109,6 +114,46 @@
                 <li class="hidden-xs">
                     <a href="http://twitter.com/NUASTUK" data-toggle="tooltip" data-placement="bottom" title="" data-original-title="Follow us on Twitter @NUASTUK">
                         <i class="icon-twitter"></i>
+                    </a>
+                </li>
+            </ul>
+            <ul id="menu1" style="display: none;">
+                <li id="link_index" class="hidden-sm hidden-md active">
+                    <a href="/">Home</a>
+                </li>
+                <li>
+                    <!-- #CONTINUE working here. -->
+                </li>
+            </ul>
+        </div>
+    </div>
+    <div class="header_bar header_bar2">
+        <div class="container">
+            <ul id="menu2">
+                <li>
+                    <a href="#" data-original-title title>
+                        <span class="hidden-sm hidden-md">Thing that appears when in mobile menu</span>
+                        "Thing"
+                    </a>
+                </li>
+                <li class="visible-xs pull-right">
+                    <a href="https://twitter.com/NUASTUK" title data-original-title="Follow us on Twitter @NUASTUK">
+                        <i class="icon-twitter"></i>
+                    </a>
+                </li>
+                <li class="visible-xs pull-right">
+                    <a href="https://moodle.nuast.org.uk/" data-toggle="tooltip" title="" data-original-title="NUAST Moodle">
+                        <i class="icon-imac"></i>
+                    </a>
+                </li>
+                <li class="visible-xs pull-right">
+                    <a href="https://login.microsoftonline.com/" title="" data-original-title="E-mail access for staff and students">
+                        <i class="icon-email-access"></i>
+                    </a>
+                </li>
+                <li class="visible-xs pull-right">
+                    <a href="https://nova-rdwa.torchacademy.co.uk/RDWeb/" title="" data-original-title="Remote apps">
+                        <i class="icon-remote-access"></i>
                     </a>
                 </li>
             </ul>

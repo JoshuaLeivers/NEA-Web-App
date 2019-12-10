@@ -1,4 +1,4 @@
-@import url('/css/header_tagt.css');
+@import url('header_tagt.css');
 
 #header_badge {background: #ffd700; color: #555759;}
 .icon-header {font-size: 54px; margin-top: 3px;}
@@ -6,8 +6,10 @@
 
 .header_bar ul li {margin-right: 7px;}
 
-.banner-online h1 {font-family: Raleway;}
-.banner-boxes a {font-family: Raleway; font-weight: 400;}
+.banner-online h1 {
+ font-family: Raleway, sans-serif;}
+.banner-boxes a {
+ font-family: Raleway, sans-serif; font-weight: 400;}
 .banner-online h1 span {margin-left: -2px;}
 
 @media screen and (max-width: 767px) {

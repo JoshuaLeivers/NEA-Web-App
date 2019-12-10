@@ -1,0 +1,311 @@
+@font-face {
+  font-family: 'icomoon';
+  src:  url('/fonts/icomoon.eot');
+  src:  url('/fonts/icomoon.eot#iefix') format('embedded-opentype'),
+    url('/fonts/icomoon.woff2') format('woff2'),
+    url('/fonts/icomoon.ttf') format('truetype'),
+    url('/fonts/icomoon.woff') format('woff'),
+    url('/fonts/icomoon.svg?kssr5x#icomoon') format('svg');
+  font-weight: normal;
+  font-style: normal;
+}
+
+[class^="icon-"], [class*=" icon-"] {
+  /* use !important to prevent issues with browser extensions that change fonts */
+  font-family: 'icomoon' !important;
+  speak: none;
+  font-style: normal;
+  font-weight: normal;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+
+  /* Better Font Rendering =========== */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.icon-cloud-upload:before {
+  content: "\e974";
+}
+.icon-remote-access:before {
+  content: "\e910";
+}
+.icon-down-arrow:before {
+  content: "\e906";
+}
+.icon-insight:before {
+  content: "\e94f";
+}
+.icon-information:before {
+  content: "\e91a";
+}
+.icon-parent-info:before {
+  content: "\e91b";
+}
+.icon-library:before {
+  content: "\e91c";
+}
+.icon-arrow-left:before {
+  content: "\e91d";
+}
+.icon-arrow-right:before {
+  content: "\e91e";
+}
+.icon-cross:before {
+  content: "\e91f";
+}
+.icon-feed:before {
+  content: "\e920";
+}
+.icon-file-pdf:before {
+  content: "\e950";
+}
+.icon-google:before {
+  content: "\e951";
+}
+.icon-menu:before {
+  content: "\e952";
+}
+.icon-pause:before {
+  content: "\e953";
+}
+.icon-play:before {
+  content: "\e954";
+}
+.icon-share:before {
+  content: "\e955";
+}
+.icon-spinner:before {
+  content: "\e956";
+}
+.icon-twitter:before {
+  content: "\e957";
+}
+.icon-email-access:before {
+  content: "\e921";
+}
+.icon-home-access:before {
+  content: "\e922";
+}
+.icon-hotkey_careers:before {
+  content: "\e900";
+}
+.icon-hotkey_letters:before {
+  content: "\e92b";
+}
+.icon-hotkey_portal:before {
+  content: "\e934";
+}
+.icon-hotkey_login:before {
+  content: "\e919";
+}
+.icon-hotkey_uniform:before {
+  content: "\e90f";
+}
+.icon-hotkey_homework:before {
+  content: "\e639";
+}
+.icon-hotkey_newsletter:before {
+  content: "\e63a";
+}
+.icon-hotkey_exams:before {
+  content: "\e63b";
+}
+.icon-hotkey_revision:before {
+  content: "\e63c";
+}
+.icon-notice_achievement:before {
+  content: "\e963";
+}
+.icon-notice_calendar:before {
+  content: "\e964";
+}
+.icon-notice_canteen:before {
+  content: "\e965";
+}
+.icon-notice_enrichment:before {
+  content: "\e966";
+}
+.icon-notice_homework:before {
+  content: "\e967";
+}
+.icon-notice_letters:before {
+  content: "\e968";
+}
+.icon-notice_maths:before {
+  content: "\e969";
+  color: #4d4d4d;
+}
+.icon-notice_newsletter:before {
+  content: "\e96a";
+}
+.icon-notice_uniform:before {
+  content: "\e96b";
+}
+.icon-app-form:before {
+  content: "\e908";
+}
+.icon-year7:before {
+  content: "\e902";
+}
+.icon-year10:before {
+  content: "\e903";
+}
+.icon-year12:before {
+  content: "\e904";
+}
+.icon-achievement:before {
+  content: "\e905";
+}
+.icon-NUAST-Molecule:before {
+  content: "\e901";
+}
+.icon-NUAST-logo:before {
+  content: "\e638";
+}
+.icon-handshake:before {
+  content: "\e61e";
+}
+.icon-adjustable:before {
+  content: "\e60e";
+}
+.icon-apple:before {
+  content: "\e60f";
+}
+.icon-clock4:before {
+  content: "\e611";
+}
+.icon-cog:before {
+  content: "\e613";
+}
+.icon-email29:before {
+  content: "\e615";
+}
+.icon-enter3:before {
+  content: "\e617";
+}
+.icon-globe15:before {
+  content: "\e619";
+}
+.icon-imac:before {
+  content: "\e61b";
+}
+.icon-ipad:before {
+  content: "\e620";
+}
+.icon-map5:before {
+  content: "\e622";
+}
+.icon-multiple25:before {
+  content: "\e624";
+}
+.icon-news:before {
+  content: "\e907";
+}
+.icon-News:before {
+  content: "\e625";
+}
+.icon-NUAST-building:before {
+  content: "\e627";
+  color: #444;
+}
+.icon-open-door:before {
+  content: "\e629";
+}
+.icon-package11:before {
+  content: "\e62a";
+}
+.icon-phone16:before {
+  content: "\e62b";
+}
+.icon-plant13:before {
+  content: "\e62c";
+}
+.icon-radio:before {
+  content: "\e62d";
+}
+.icon-science2:before {
+  content: "\e62e";
+}
+.icon-settings31:before {
+  content: "\e62f";
+}
+.icon-smartphone:before {
+  content: "\e630";
+}
+.icon-spanner:before {
+  content: "\e631";
+}
+.icon-tablet:before {
+  content: "\e632";
+}
+.icon-timetable1:before {
+  content: "\e633";
+}
+.icon-tram4:before {
+  content: "\e634";
+}
+.icon-usher1:before {
+  content: "\e635";
+}
+.icon-white39:before {
+  content: "\e636";
+}
+.icon-num-1:before {
+  content: "\e604";
+}
+.icon-num-2:before {
+  content: "\e605";
+}
+.icon-num-3:before {
+  content: "\e606";
+}
+.icon-num-4:before {
+  content: "\e607";
+}
+.icon-num-5:before {
+  content: "\e608";
+}
+.icon-num-6:before {
+  content: "\e60a";
+}
+.icon-num-7:before {
+  content: "\e60c";
+}
+.icon-num-8:before {
+  content: "\e60d";
+}
+.icon-num-9:before {
+  content: "\e610";
+}
+.icon-num-10:before {
+  content: "\e612";
+}
+.icon-students:before {
+  content: "\e600";
+}
+.icon-engineering:before {
+  content: "\e614";
+}
+.icon-business:before {
+  content: "\e616";
+}
+.icon-chemistry:before {
+  content: "\e618";
+}
+.icon-english:before {
+  content: "\e61a";
+}
+.icon-humanities:before {
+  content: "\e61c";
+}
+.icon-ict:before {
+  content: "\e61d";
+}
+.icon-maths:before {
+  content: "\e621";
+}
+.icon-physics:before {
+  content: "\e626";
+}
