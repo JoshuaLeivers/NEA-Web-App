@@ -1,0 +1,15 @@
+@import url('/css/header_tagt.css');
+
+#header_badge {background: #ffd700; color: #555759;}
+.icon-header {font-size: 54px; margin-top: 3px;}
+.header_bar2 ul li:hover>a {background-color: #EDDA2E; color: #555759;}
+
+.header_bar ul li {margin-right: 7px;}
+
+.banner-online h1 {font-family: Raleway;}
+.banner-boxes a {font-family: Raleway; font-weight: 400;}
+.banner-online h1 span {margin-left: -2px;}
+
+@media screen and (max-width: 767px) {
+ #menu1,#menu2 {min-height: 360px;}
+}

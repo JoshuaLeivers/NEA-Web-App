@@ -2,9 +2,118 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Login</title>
+    <meta name="viewport" content="width=device-width,minimum-scale=1.0,maximum-scale=1.0">
+    <link rel="apple-touch-icon" sizes="180x180" href="https://nuast.org.uk/icons/apple-touch-icon.png?v=aljdJbR0yr">
+    <link rel="icon" type="image/png" href="https://nuast.org.uk/icons/favicon-32x32.png" sizes="32x32">
+    <link rel="icon" type="image/png" href="https://nuast.org.uk/icons/favicon-16x16.png" sizes="16x16">
+
+    <link rel="manifest" href="/manifest.json">
+
+    <title>Login | NUAST Student Portal</title>
+    <meta name="theme-color" content="#ffda00">
+
+    <link rel="stylesheet" href="https://nuast.org.uk/css/main.css?v=10">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Raleway:300,400,800" media="all">
+    <link href="https://nuast.org.uk/css/site-icons.css" rel="stylesheet">
+
+    <style type="text/css">
+        .banner {background-image: url('/img/banner_home_2018.jpg');}
+        .banner-box {border-radius: 1.6vh; padding: 1.6vh;}
+        .banner-box h2 {font-size: 1.92vh; font-weight: bold;}
+        .banner-box p {font-size: 1.28vh; color: white;}
+        .banner-year7 {background-color: #6eaa60;}
+        .banner-year10 {background-color: #f29800;}
+        .banner-year12 {background-color: #009ee2;}
+        .centre-content img {display: block; margin: 0 auto;}
+        .centre-content .main-logo {margin-bottom: 4vh; height: 17.6vh;}
+        .centre-content .year-logo {height: 9.6vh;}
+        .centre-content .find-out-more img {height: 6.4vh; margin: 1.6vh auto; transition: 0.2s;}
+        .centre-content .find-out-more:hover img {transform: scale(0.9);}
+        .banner-logo img {height: 17.6vh; margin: 2vh 0 4vh 0;}
+        .notice {margin-top: 4vh;}
+        .apply-link {background: #ffd700; color: #555759; display: block; font-size: 1.92vh; font-weight: 700; border-radius: 1.6vh; padding: 1.6vh; margin: 1.6vh 0; transition: 0.2s;}
+        .apply-link:hover {text-decoration: none; transform: scale(0.95); color: #555759;}
+        .slogan {font-size: 4.8vh; line-height: 5.4vh;}
+
+        #home_video {background-image: url('/img/home_video_2018.jpg'); padding: 40px 0;}
+        #home_video video {border-radius: 20px;}
+        #home_image1 {background-image: url('/img/home_body_2018.jpg');}
+        #home_offer .boxes img {height: 10rem;}
+        #home_offer h3 {font-weight: 700; color: #555759;}
+
+        #home-head {background: #ffd700;}
+
+        #home_news {background-image: url('/img/home_news_2018.jpg'); padding-bottom: 60px;}
+        #home_news h2 {color: white;}
+        .news-image.default-image {background-color: #575556;}
+        .grid-refresh {color: #ffd700;}
+
+        #home_news a {text-decoration: none;}
+        .news-link a {color: inherit; font-weight: 700;}
+        .news-item.i1,.news-item.i4 {background: rgba(255,215,0,0.7);}
+        .news-item.i2 {background: rgba(202,200,200,0.7);}
+        .news-item.i3 {background: rgba(85,87,89,0.7); color: white;}
+
+        @media (min-width: 768px) {
+        .news-item.i1 .news-text:before,.news-item.i4 .news-text:before {background: linear-gradient(rgba(255,215,0,0),rgba(255,215,0,1));}
+        .news-item.i2 .news-text:before {background: linear-gradient(rgba(202,200,200,0),rgba(202,200,200,1));}
+        .news-item.i3 .news-text:before {background: linear-gradient(rgba(85,87,89,0),rgba(85,87,89,1));}
+        }
+
+        .row.boxes>div>div h3 {font-family: Raleway;}
+
+        @media (max-width: 767px) {
+        .down-arrow {display: none;}
+        .banner.full-height {height: auto; position: static; margin-top: 60px; padding: 10px 0;}
+        .banner-box {margin: 0 20px 20px 20px;}
+        .banner.full-height+.hot-keys {margin-top: 0;}
+
+        .centre-content .year-logo {height: 150px;}
+        .centre-content .find-out-more img {height: 100px;}
+        .banner-box h2 {font-size: 2rem;}
+        .banner-box p {font-size: 1.4rem;}
+        .apply-link {font-size: 2rem;}
+        }
+    </style>
 </head>
 <body>
-
+<div id="header">
+    <div class="header_bar header_bar1">
+        <div class="container">
+            <a id="header_badge" href="/" data-toggle="tooltip" data-placement="bottom" title data-original-title="NUAST">
+                <div class="icon icon-NUAST-Molecule icon-header">
+                </div>
+            </a>
+            <img id="header_text" src="https://nuast.org.uk/img/header_text.svg" alt="NUAST">
+            <ul class="header_icons">
+                <li class="visible-xs" id="menu_link">
+                    <a href="#">
+                        <i class="icon-menu"></i>
+                    </a>
+                </li>
+                <li class="hidden-xs">
+                    <a href="https://nova-rdwa.torchacademy.co.uk/RDWeb/" data-toggle="tooltip" data-placement="bottom" title="" data-original-title="Remote apps">
+                        <i class="icon-remote-access"></i>
+                    </a>
+                </li>
+                <li class="hidden-xs">
+                    <a href="https://login.microsoftonline.com/" data-toggle="tooltip" data-placement="bottom" title="" data-original-title="E-mail access for staff and students">
+                        <i class="icon-email-access"></i>
+                    </a>
+                </li>
+                <li class="hidden-xs">
+                    <a href="https://moodle.nuast.org.uk/" data-toggle="tooltip" data-placement="bottom" title="" data-original-title="NUAST Moodle">
+                        <i class="icon-imac"></i>
+                    </a>
+                </li>
+                <li class="hidden-xs">
+                    <a href="http://twitter.com/NUASTUK" data-toggle="tooltip" data-placement="bottom" title="" data-original-title="Follow us on Twitter @NUASTUK">
+                        <i class="icon-twitter"></i>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
 </body>
 </html>

@@ -1,0 +1,83 @@
+@import url('header.css');
+@import url('footer.css');
+@import url('main_tagt.css?v=2');
+
+body,input,select,option,.tooltip-inner {font-family: Raleway;}
+.emergency {border: 0; margin: 10px 0;}
+
+.section-dark {background-color: #555759; color: white;}
+.section .icon-NUAST-Molecule {color: #cac8c8;}
+.section-dark .icon-NUAST-Molecule,.section-dark h2,.section-dark h3 {color: white;}
+.section-dark input,.section-dark textarea,.section-dark select,.section-dark option {color: white;}
+.section-dark option {background: #555759;}
+
+.btn-primary,.btn-primary:hover,.btn-primary:active,.btn-primary:focus,.btn-primary:active:hover,.btn-primary:active:focus {background: #ffd700; border-color: #ffd700; color: #555759;}
+.btn-primary:hover {opacity: 0.5;}
+
+.section ul li {font-weight: 700;}
+.section a {color: inherit; text-decoration: underline; font-weight: 700;}
+
+.big-link {margin: 10px 0;}
+.big-link.first {margin-top: 30px;}
+.big-link a {display: inline-block; text-decoration: none; background: white; font-weight: 700; padding: 5px; color: #333; border-radius: 5px; -moz-border-radius: 5px; -webkit-border-radius: 5px; transition: 0.2s;}
+.big-link a:hover {transform: scale(0.95); text-decoration: none;}
+
+.calendar span:nth-child(2) {font-size: 14px;}
+.translated-ltr .content {margin-top: 620px;}
+.overlay-logo {font-size: 120px;}
+
+.hot-keys {background: #ffd700;}
+.row.links div[class^='col-sm']:hover {background: white;}
+.row.links div[class^='col-sm'] h4 {margin-bottom: 0; font-size: 1.4rem; font-weight: 700;}
+.row.links div[class^='col-sm'] a {color: #555759;}
+.svg-icon {height: 2.5em; display: block; margin: 5px auto;}
+
+#notices-carousel {margin-bottom: 40px;}
+.banner .notice h2 {text-transform: uppercase; font-weight: 800;}
+.banner .notice h3 {color: #ffd700; font-weight: 800;}
+
+.hot-keys {margin-top: 460px;}
+.banner.full-height+.hot-keys {margin-top: 100vh;}
+.translated-ltr .hot-keys {margin-top: 430px;}
+
+.footer .half-height {width: 125px; display: inline-block; vertical-align: middle;}
+.footer .half-height img {width: 125px;}
+
+@media (min-width: 768px) {
+ .hot-keys {margin-top: 660px;}
+ .banner.full-height+.hot-keys {margin-top: 100vh;}
+ .banner-svg {bottom: 20px;}
+}
+@media (min-width: 992px) {
+ .banner-svg {bottom: 20px;}
+}
+@media (min-width: 1800px) {
+ .hot-keys {margin-top: calc(33.3333333vw + 60px);}
+}
+
+@media (max-width: 767px) {
+ .row.links {background: #eee;}
+ .overlay {position: static; background: #666; padding: 20px 0;}
+}
+@media screen and (min-width: 1200px) {
+ .row.links div[class^='col-sm'] h4 {font-size: 1.6rem;}
+}
+
+
+.down-arrow {-moz-animation: bounce 2s infinite; -webkit-animation: bounce 2s infinite; animation: bounce 2s infinite;}
+.down-arrow:hover {-moz-animation: none; -webkit-animation: none; animation: none;}
+@-moz-keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {-moz-transform: translateY(0); transform: translateY(0);}
+  40% {-moz-transform: translateY(-30px); transform: translateY(-30px);}
+  60% {-moz-transform: translateY(-15px); transform: translateY(-15px);}
+}
+@-webkit-keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {-webkit-transform: translateY(0); transform: translateY(0);}
+  40% {-webkit-transform: translateY(-30px); transform: translateY(-30px);}
+  60% {-webkit-transform: translateY(-15px); transform: translateY(-15px);}
+}
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {-moz-transform: translateY(0); -ms-transform: translateY(0); -webkit-transform: translateY(0); transform: translateY(0);}
+  40% {-moz-transform: translateY(-30px); -ms-transform: translateY(-30px); -webkit-transform: translateY(-30px); transform: translateY(-30px);}
+  60% {-moz-transform: translateY(-15px); -ms-transform: translateY(-15px); -webkit-transform: translateY(-15px); transform: translateY(-15px);}
+}

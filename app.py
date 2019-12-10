@@ -1,4 +1,4 @@
-from flask import Flask, request, make_response, render_template
+from flask import Flask, request, make_response, render_template, redirect, url_for
 import mysql.connector
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
@@ -26,20 +26,31 @@ else:
 cookies = request.cookies
 
 
-def set_cookies():
+def set_user():
     global user
     user = {"sessionID": cookies.get("sessionID"),
             "username": cursor.execute("SELECT username FROM sessions WHERE sess_id=%s",
-                                       request.cookies.get("username"))}
+                                       cookies.get("sessionID"))}
+
+    check_login()
 
 
-set_cookies()
+set_user()
 
 
 @app.route("/")
 @app.route("/dashboard")
+@app.route("/home")
 def home():
     return "This is a test!　私はジョシュアです。"
+
+
+@app.route("/login")
+def login():
+    if check_login():
+        return redirect(url_for("home"))
+    else:
+        # TODO:
 
 
 # Utility functions
@@ -49,7 +60,7 @@ def get_ip():
 
 def check_login():
     template = "login.html"
-    set_cookies()
+    set_user()
     if not user["sessionID"] is None:
         if check_ban():
             cursor.execute("DELETE FROM sessions WHERE username=%s", user["username"])
@@ -70,7 +81,7 @@ def check_login():
 
 
 def check_ban():
-    set_cookies()
+    set_user()
 
     row = cursor.execute("SELECT ban_admin, ban_adminvisible, ban_reason, ban_start, ban_end FROM bans WHERE "
                          "ban_start < NOW() AND ban_end > NOW() AND ((ban_ip=%d AND username=%s) OR (ban_ip IS "
@@ -82,10 +93,10 @@ def check_ban():
 
 
 def end_session():
-    cursor.execute("DELETE FROM sessions WHERE sess_id=%s", user["sessionID"])
+    if cursor.execute("SELECT TRUE FROM sessions WHERE sess_id=%s", user["sessionID"]).fetchone()[0]:
+        cursor.execute("DELETE FROM sessions WHERE sess_id=%s", user["sessionID"])
     delete_cookie("sessionID")
-    delete_cookie("username")
-    set_cookies()
+    set_user()  # Sets user dictionary to None values
 
 
 def delete_cookie(key):
