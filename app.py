@@ -1,17 +1,24 @@
+import secrets
+
 from flask import Flask, request, make_response, render_template, redirect, url_for
 import mysql.connector
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
+from flask.ext.bcrypt import Bcrypt
+import onetimepass
+import base64
 
 # CONFIG VALUES
 db_user = "portal_man"
 db_pass = "f8hg30DGt&4svaA4"
+db_host = "localhost"
 db_name = "portal"
 
 app = Flask(__name__)
+bcrypt = Bcrypt(app)
 
 try:
-    cnx = mysql.connector.connect(user=db_user, password=db_pass, database=db_name)
+    cnx = mysql.connector.connect(user=db_user, password=db_pass, host=db_host, database=db_name)
 except mysql.connector.Error as error:
     if error.errno == errorcode.ER_ACCESS_DENIED_ERROR:
         print("The username or password for the database is incorrect.")
@@ -41,16 +48,26 @@ set_user()
 @app.route("/")
 @app.route("/dashboard")
 @app.route("/home")
-def home():
+def dashboard():
     return "This is a test!　私はジョシュアです。"
 
 
-@app.route("/login")
+@app.route("/login", methods=["GET", "POST"])
 def login():
     if check_login():
-        return redirect(url_for("home"))
+        return redirect(url_for(request.args.get("origin")) or url_for("home"))
     else:
-        # TODO:
+        if request.method == "POST":
+            username = request.form.get("username")
+            password = request.form.get("password")
+            tfa = request.form.get("2fa")
+
+            hashed, secret = [cursor.execute("SELECT password, 2fa FROM users WHERE username = %s", username).fetchone()[i] for i in range(2)]
+
+            if hashed is None or not bcrypt.check_password_hash(hashed, password):
+                return render_template("login.html", form=request.form, error="Username or password is incorrect")
+            elif tfa is None:
+                start_session(username)
 
 
 # Utility functions
@@ -66,7 +83,7 @@ def check_login():
             cursor.execute("DELETE FROM sessions WHERE username=%s", user["username"])
             end_session()
         else:
-            sess = cursor.execute("SELECT sess_ip, sess_useragent FROM sessions WHERE sid=%s", sid).fetchone()
+            sess = cursor.execute("SELECT sess_ip, sess_useragent FROM sessions WHERE sid=%s", user["sessionID"]).fetchone()
             if sess:
                 if sess[0] != user["ip"] or sess[1] != get_ip():
                     end_session()
@@ -90,6 +107,14 @@ def check_ban():
                                                                                         user["username"],
                                                                                         user["ip"])).fetchone()
     return row
+
+
+def start_session(username):
+    chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!#$%&'()*+-./:<=>?@[]^_`{|}~"
+    sess_id = "".join(secrets.choice(chars) for i in range(32))
+
+    cursor.execute("INSERT INTO sessions (sess_id, username, sess_start, sess_last, sess_ip, sess_useragent) VALUES ("
+                   "%s, %s, NOW(), NOW(), %d, %s)", (sess_id, username, get_ip(), request.user_agent.string))
 
 
 def end_session():
