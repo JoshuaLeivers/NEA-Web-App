@@ -4,7 +4,7 @@ from flask import Flask, request, make_response, render_template, redirect, url_
 import mysql.connector
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
-from flask.ext.bcrypt import Bcrypt
+from flask_bcrypt import Bcrypt
 import onetimepass
 import base64
 
@@ -30,10 +30,9 @@ except mysql.connector.Error as error:
 else:
     cursor = cnx.cursor()
 
-cookies = request.cookies
-
 
 def set_user():
+    cookies = request.cookies
     global user
     user = {"sessionID": cookies.get("sessionID"),
             "username": cursor.execute("SELECT username FROM sessions WHERE sess_id=%s",
@@ -62,7 +61,9 @@ def login():
             password = request.form.get("password")
             tfa = request.form.get("2fa")
 
-            hashed, secret = [cursor.execute("SELECT password, 2fa FROM users WHERE username = %s", username).fetchone()[i] for i in range(2)]
+            hashed, secret = [
+                cursor.execute("SELECT password, 2fa FROM users WHERE username = %s", username).fetchone()[i] for i in
+                range(2)]
 
             if hashed is None or not bcrypt.check_password_hash(hashed, password):
                 return render_template("login.html", form=request.form, error="Username or password is incorrect")
@@ -77,13 +78,14 @@ def get_ip():
 
 def check_login():
     template = "login.html"
-    set_user()
-    if not user["sessionID"] is None:
+    cookies = request.cookies
+    if not cookies["sessionID"] is None:
         if check_ban():
             cursor.execute("DELETE FROM sessions WHERE username=%s", user["username"])
             end_session()
         else:
-            sess = cursor.execute("SELECT sess_ip, sess_useragent FROM sessions WHERE sid=%s", user["sessionID"]).fetchone()
+            sess = cursor.execute("SELECT sess_ip, sess_useragent FROM sessions WHERE sid=%s",
+                                  user["sessionID"]).fetchone()
             if sess:
                 if sess[0] != user["ip"] or sess[1] != get_ip():
                     end_session()
@@ -97,16 +99,11 @@ def check_login():
         return False
 
 
-def check_ban():
-    set_user()
-
-    row = cursor.execute("SELECT ban_admin, ban_adminvisible, ban_reason, ban_start, ban_end FROM bans WHERE "
-                         "ban_start < NOW() AND ban_end > NOW() AND ((ban_ip=%d AND username=%s) OR (ban_ip IS "
-                         "NULL and username=%s) OR (ban_ip=%d AND username IS NULL))", (user["ip"],
-                                                                                        user["username"],
-                                                                                        user["username"],
-                                                                                        user["ip"])).fetchone()
-    return row
+def check_ban(ip, username):
+    bans = cursor.execute("SELECT ban_admin, ban_adminvisible, ban_reason, ban_start, ban_end FROM bans WHERE "
+                          "ban_start < NOW() AND ban_end > NOW() AND ((ban_ip=%d AND username=%s) OR (ban_ip IS "
+                          "NULL and username=%s) OR (ban_ip=%d AND username IS NULL))", (ip, username, username, ip))
+    return bans
 
 
 def start_session(username):
