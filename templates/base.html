@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    {% if title %}
+    <title>{{ title }}</title>
+    {% else %}
+    <title>Student Portal</title>
+    {% endif %}
+    <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+    <div class="navbar">
+        <ul>
+            <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        </ul>
+        <hr>
+    </div>
+    <div class="main">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

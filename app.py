@@ -1,6 +1,6 @@
 import secrets
 
-from flask import Flask, request, make_response, render_template, redirect, url_for
+from flask import Flask, request, make_response, render_template, redirect, url_for, abort
 import mysql.connector
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
@@ -41,30 +41,21 @@ else:
     cursor = cnx.cursor()
 
 
-def set_user():
-    cookies = request.cookies
-    global user
-    user = {"sessionID": cookies.get("sessionID"),
-            "username": cursor.execute("SELECT username FROM sessions WHERE sess_id=%s",
-                                       cookies.get("sessionID"))}
-
-    check_login()
-
-
-set_user()
-
-
 @app.route("/")
 @app.route("/dashboard")
 def dashboard():
+    if check_logout():
+        return redirect(url_for("login"), )
     return "This is a test!　私はジョシュアです。"
 
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    prev = redirect((request.referrer and url_for(request.referrer) == request.url_root) or url_for(request.args.get("redirect")) or url_for("home"), 302)
+
     logout = check_logout()
     if not logout:
-        return redirect(url_for(request.args.get("origin")) or url_for("home"))
+        return prev
     else:
         if request.method == "POST":
             username = request.form.get("username")
@@ -75,25 +66,31 @@ def login():
 
             hashed, secret = [user[i] for i in range(2)]
 
-            if user is None:
+            if user is None: # If there is no user by the given username
                 return render_template("login.html", form=request.form, error="Username or password is incorrect.")
-            elif hashed is None:
+            elif hashed is None: # If there is no password set for the user
                 return render_template("login.html", form=request.form, error="No password set for account. Please "
                                                                               "select 'reset password'.")
-            elif not bcrypt.check_password_hash(hashed, password):
+            elif not bcrypt.check_password_hash(hashed, password): # If the password is not correct
                 return render_template("login.html", form=request.form, error="Username or password is incorrect.")
-            elif token is None and secret is not None:
-                return render_template("login.html", form=request.form, error="Two Factor Authentication is enabled "
-                                                                              "on this account. Please enter your 2FA"
-                                                                              " code before attempting to log in "
-                                                                              "again.")
-            elif token:
-                if not onetimepass.valid_totp(secret, token):
-                    return render_template("login.html", form=request.form, error="Two Factor Authentication code is incorrect.")
-                else:
-                    start_session(username)
             else:
+                if not secret:
+                    start_session(username)
+                    return prev
+                else:
+                    if onetimepass.valid_hotp(token, secret):
+                        start_session(username)
+                        return prev
+                    else:
+                        return render_template("login.html", form=request.form, error="Two Factor Authentication code incorrect.")
 
+
+
+
+# Error Handling
+@app.errorhandler(451)
+def err_legal():
+    return render_template("451.html"), 451
 
 
 # Utility functions
@@ -134,10 +131,20 @@ def check_logout():
 
 
 def check_ban(ip, username):
-    bans = cursor.execute("SELECT `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, `ban_end` FROM bans "
-                          "WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d AND `username`=%s) "
-                          "OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND `username` IS NULL))",
-                          (ip, username, username, ip))
+    banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, `ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND `username` IS NULL))", (ip, username, username, ip))
+
+    bans = []
+    for ban in banlist:
+        ban = {
+            "username": ban[0],
+            "ip": ban[1],
+            "admin": ban[2],
+            "visible": ban[3],
+            "reason": ban[4],
+            "start": ban[5],
+            "end": ban[6]
+        }
+        bans.append(ban)
     if bans:
         return Bans(bans)
     else:
@@ -145,9 +152,17 @@ def check_ban(ip, username):
 
 
 def start_session(username):
+    origin = (request.referrer and url_for(request.referrer)) or url_for(request.args.get("origin")) or url_for("dashboard")
     bans = check_ban(get_ip(), username)
     if bans:
-        pass
+        if any(ban["visible"] == 0 for ban in bans.bans):
+            abort(500)
+        elif any(ban["visible"] == 51 for ban in bans.bans):
+            abort(make_response(render_template("451.html")))
+        elif any(ban["ip"] is None for ban in bans.bans):
+            return
+
+        return make_response(render_template("banned.html", user=username, ip=request.remote_addr, ))
         # TODO: Handle banned accounts
     else:
         chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!#$%&'()*+-./:<=>?@[]^_`{|}~"
@@ -156,16 +171,13 @@ def start_session(username):
         cursor.execute("INSERT INTO sessions (sess_id, username, sess_start, sess_last, sess_ip, sess_useragent) VALUES"
                        "(%s, %s, NOW(), NOW(), %d, %s)", (sess_id, username, get_ip(), request.user_agent.string))
 
+        request.cookies.
 
-def end_session():
+
+def end_session(response):
     if cursor.execute("SELECT TRUE FROM sessions WHERE sess_id=%s", user["sessionID"]).fetchone()[0]:
         cursor.execute("DELETE FROM sessions WHERE sess_id=%s", user["sessionID"])
-    delete_cookie("sessionID")
-    set_user()  # Sets user dictionary to None values
-
-
-def delete_cookie(key):
-    return make_response().set_cookie(key, "", max_age=0)
+    return response.set_cookie("sessionID", "", max_age=0)
 
 
 if __name__ == '__main__':

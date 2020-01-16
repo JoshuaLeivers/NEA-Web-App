@@ -1,16 +1,6 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Login | Student Portal</title>
-    <link rel="stylesheet" href="/css/main.css">
-</head>
-<body>
-<div class="navbar">
-    <a href="{{ url_for("dashboard") }}">Dashboard</a>
-</div>
+{% extends "base.html" %}
 
-<div class="main">
+{% block content %}
     <strong><span style="color: red; ">{{ error }}</span></strong>
     <form>
         Username:<br>
@@ -18,6 +8,4 @@
         Password:<br>
         <input type="password" name="password">
     </form>
-</div>
-</body>
-</html>
+{% endblock %}
