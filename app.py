@@ -67,7 +67,7 @@ def login():
             hashed, secret = [user[i] for i in range(2)]
 
             if user is None: # If there is no user by the given username
-                return render_template("login.html", form=request.form, error="Username or password is incorrect.")
+                return make_response(render_template("login.html", form=request.form, error="Username or password is incorrect.")).set_cookie("sessionID", "", max_age=0)
             elif hashed is None: # If there is no password set for the user
                 return render_template("login.html", form=request.form, error="No password set for account. Please "
                                                                               "select 'reset password'.")
@@ -159,8 +159,10 @@ def start_session(username):
             abort(500)
         elif any(ban["visible"] == 51 for ban in bans.bans):
             abort(make_response(render_template("451.html")))
-        elif any(ban["ip"] is None for ban in bans.bans):
-            return
+        elif any(ban["username"] is None for ban in bans.bans):
+            if ban["visible"] < 5:
+                if ban["visible"] < 4:
+                    ban[""]
 
         return make_response(render_template("banned.html", user=username, ip=request.remote_addr, ))
         # TODO: Handle banned accounts
@@ -175,9 +177,8 @@ def start_session(username):
 
 
 def end_session(response):
-    if cursor.execute("SELECT TRUE FROM sessions WHERE sess_id=%s", user["sessionID"]).fetchone()[0]:
-        cursor.execute("DELETE FROM sessions WHERE sess_id=%s", user["sessionID"])
-    return response.set_cookie("sessionID", "", max_age=0)
+    pass
+    # TODO: Either make a working version of this, or add manually handling it to where it is needed.
 
 
 if __name__ == '__main__':
