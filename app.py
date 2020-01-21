@@ -20,6 +20,12 @@ db_pass = "$Z8BQb@zktI2Fst@"
 db_host = "localhost"
 db_name = "portal"
 
+email = {
+    "legal": "joshua@leivers.dev",
+    "webmaster": "joshua@leivers.dev",
+    "enquiries": "joshua@leivers.dev"
+}
+
 app = Flask(__name__)
 bcrypt = Bcrypt(app)
 
@@ -157,8 +163,6 @@ def start_session(username):
     if bans:
         if any(ban["visible"] == 0 for ban in bans.bans):
             abort(500)
-        elif any(ban["visible"] == 51 for ban in bans.bans):
-            return make_response(render_template("err_banned_legal.html"))
         else:
             baninfo = ""
             for ban in bans.bans:
@@ -171,23 +175,33 @@ def start_session(username):
                                 ban["start"] = None
 
                 baninfo = ban
-                if baninfo["username"] is None:
-                    break
-                elif baninfo["ip"] is None and not any(banned["username"] is None for banned in bans.bans):
-                    break
-                elif not any(banned["ip"] is None or banned["username"] is None for banned in bans.bans):
-                    break
+                if not any(ban["visible"] == 51 for ban in bans.bans):
+                    if baninfo["username"] is None:
+                        break
+                    elif baninfo["ip"] is None and not any(banned["username"] is None for banned in bans.bans):
+                        break
+                    elif not any(banned["ip"] is None or banned["username"] is None for banned in bans.bans):
+                        break
+                else:
+                    if baninfo["visible"] == 51:
+                        break
 
-            return make_response(render_template("err_banned.html", ban=baninfo), 403)
+            if baninfo["visible"] == 51:
+                return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
+            else:
+                return make_response(render_template("err_banned.html", ban=baninfo), 403)
     else:
+        # These are the characters allowed within a cookie value
         chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!#$%&'()*+-./:<=>?@[]^_`{|}~"
         sess_id = "".join(secrets.choice(chars) for i in range(32))
 
         cursor.execute("INSERT INTO sessions (sess_id, username, sess_start, sess_last, sess_ip, sess_useragent) VALUES"
                        "(%s, %s, NOW(), NOW(), %d, %s)", (sess_id, username, get_ip(), request.user_agent.string))
 
-        resp = redirect((request.referrer and url_for(request.referrer)[:request.url_root.len] == request.url_root) or url_for(request.args.get("redirect")) or url_for("home"), 302)
-        resp.set_cookie("sessionID", sess_id, max_age=)
+        resp = redirect((request.referrer and url_for(request.referrer)[:request.url_root.len] == request.url_root) or
+                        url_for(request.args.get("redirect")) or url_for("home"), 302)
+        resp.set_cookie("sessionID", sess_id, max_age=None, samesite=True, secure=True, httponly=True)
+        return resp
 
 
 def end_session(response):

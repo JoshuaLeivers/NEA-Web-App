@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+    <h1>
+    {% if baninfo["username"] is None %}
+    IP Blocked for Legal Reasons
+    {% elif baninfo["ip"] is None %}
+    Account Locked for Legal Reasons
+    {% else %}
+    Access to Account Blocked for Legal Reasons
+    {% endif %}
+    </h1>
+
+    <p>Your access to the student portal has been blocked for legal reasons.</p>
+    <p>Not sure why? Get in contact: <a href="mailto:{{ email.legal }}">{{ email.legal }}</a></p>
+
+{% endblock %}
