@@ -1,4 +1,5 @@
 import secrets
+from urllib.parse import urlparse
 
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort
 import mysql.connector
@@ -8,10 +9,16 @@ from flask_bcrypt import Bcrypt
 import onetimepass
 import base64
 
+from wtforms import StringField
+from wtforms.validators import DataRequired
+
 
 class Bans:
     def __init__(self, bans):
         self.bans = bans
+
+class LoginForm:
+    username = StringField("Username", validators=DataRequired())
 
 
 # CONFIG VALUES
@@ -57,7 +64,7 @@ def dashboard():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    prev = redirect((request.referrer and url_for(request.referrer) == request.url_root) or url_for(request.args.get("redirect")) or url_for("home"), 302)
+    prev = redirect((urlparse(request.referrer).hostname == request.url_root and request.referrer) or url_for(request.args.get("redirect") or "dashboard"), code=302)
 
     logout = check_logout()
     if not logout:
@@ -89,14 +96,18 @@ def login():
                         return prev
                     else:
                         return render_template("login.html", form=request.form, error="Two Factor Authentication code incorrect.")
+        else:
+            return render_template("login.html")
 
 
-
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    pass # TODO: Add register function
 
 # Error Handling
 @app.errorhandler(451)
 def err_legal():
-    return render_template("451.html"), 451
+    return render_template("err_451.html"), 451
 
 
 # Utility functions
@@ -113,31 +124,31 @@ def get_useragent(full=False):
 
 def check_logout():
     cookies = request.cookies
-    if not cookies["sessionID"] is None:
+    if not cookies.get("sessionID") is None:
         session = cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
-                                 "`sess_id` = %s", cookies["sessionID"]).fetchone()
+                                 "`sess_id` = %s", cookies.get("sessionID")).fetchone()
         if session:
             bans = check_ban(get_ip(), session[1])
             if bans:
                 cursor.execute("DELETE FROM sessions WHERE username=%s", session[1])
-                delete_cookie("sessionID")
                 return bans
             else:
                 if session[2] != get_ip() or session[3] != get_useragent():
                     cursor.execute("DELETE FROM `sessions` WHERE `sess_id` = %s", session[0])
-                    delete_cookie("sessionID")
                     return "IP or system changed. Please log in again to confirm your identity."
                 else:
                     return False
         else:
-            delete_cookie("sessionID")
             return True
     else:
-        return False
+        return True
 
 
 def check_ban(ip, username):
-    banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, `ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND `username` IS NULL))", (ip, username, username, ip))
+    banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, "
+                             "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d "
+                             "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND "
+                             "`username` IS NULL))", (ip, username, username, ip))
 
     bans = []
     for ban in banlist:
@@ -202,11 +213,6 @@ def start_session(username):
                         url_for(request.args.get("redirect")) or url_for("home"), 302)
         resp.set_cookie("sessionID", sess_id, max_age=None, samesite=True, secure=True, httponly=True)
         return resp
-
-
-def end_session(response):
-    pass
-    # TODO: Either make a working version of this, or add manually handling it to where it is needed.
 
 
 if __name__ == '__main__':
