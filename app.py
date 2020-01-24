@@ -22,11 +22,8 @@ class Bans:
 class LoginForm(FlaskForm):
     username = StringField("Username", validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
+    token = StringField("Token", validators=[Length(6, 6)])
     submit = SubmitField("Sign In")
-
-
-class TFAForm(FlaskForm):
-    token = StringField("Token", validators=[DataRequired()])
 
 
 class RegisterForm(FlaskForm):
@@ -36,12 +33,18 @@ class RegisterForm(FlaskForm):
     submit = SubmitField("Register")
 
 
-class ConfirmationForm(FlaskForm):
+class RegisterConfirmForm(FlaskForm):
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
     password_confirm = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password")])
     tfa = BooleanField("Setup Two Factor Authentication?")
+    submit = SubmitField("Confirm")
+
+
+class RegisterTFAForm(FlaskForm):
+    token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
+    submit = SubmitField("Verify")
 
 
 # CONFIG VALUES
@@ -90,12 +93,13 @@ def dashboard():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    prev = redirect((urlparse(request.referrer).hostname == request.url_root and request.referrer) or url_for(
-        request.args.get("redirect") or "dashboard"), code=302)
-
+    if request.referrer:
+        origin = url_for(request.args.get("redirect") or urlparse(request.referrer).hostname == request.url_root and request.referrer) or url_for("dashboard")
+    else:
+        origin = url_for(request.args.get("redirect") or "dashboard")
     logout = check_logout()
     if not logout:
-        return prev
+        return redirect(origin, 302)
     else:
         form = LoginForm()
         if form.validate_on_submit():
@@ -105,26 +109,21 @@ def login():
                 hashed, secret = [user[i] for i in range(2)]
 
                 if hashed is None:  # If there is no password set for the user
-                    return render_template("reset.html", title="Reset Password", username=form.username.data)
+                    return redirect(url_for("reset") + "?user=" + form.username.data, code=303)
                 elif not bcrypt.check_password_hash(hashed, form.password.data):  # If the password is not correct
                     return render_template("login.html", form=form, error="Username or password is incorrect.")
                 else:
                     if not secret:
-                        start_session(form.username.data)
-                        return prev
+                        return start_session(form.username.data, origin)
                     else:
-                        return render_template("login_tfa.html", username=form.username.data)
+                        if onetimepass.valid_totp(form.token.data, secret):
+                            return start_session(form.username.data, origin)
             else:
-                return make_response(render_template("login.html", form=form,
-                                                     error="Username or password is incorrect.")
-                                     ).set_cookie("sessionID", "", max_age=0)
+                resp = make_response(render_template("login.html", form=form, error="Username or password is incorrect."))
+                resp.set_cookie("sessionID", "", max_age=0)
+                return resp
         else:
             return make_response(render_template("login.html", title="Sign In", form=form))
-
-
-@app.route("/login/tfa", methods=["POST"])
-def login_tfa():
-    form = TFAForm()
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -196,9 +195,7 @@ def check_ban(ip, username):
         return False
 
 
-def start_session(username):
-    origin = (request.referrer and url_for(request.referrer)) or url_for(request.args.get("origin")) or url_for(
-        "dashboard")
+def start_session(username, origin):
     bans = check_ban(get_ip(), username)
     if bans:
         if any(ban["visible"] == 0 for ban in bans.bans):
