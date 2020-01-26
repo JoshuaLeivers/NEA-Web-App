@@ -1,5 +1,6 @@
 body {
     margin: 0;
+    font-family: 'Raleway', sans-serif;
 }
 
 .navbar ul {
@@ -21,6 +22,15 @@ body {
     padding: 14px 16px;
     text-align: center;
     text-decoration: none;
+}
+
+.navbar li a img {
+    height: 35px;
+    width: 35px;
+    margin: -8px;
+    display: block;
+    text-decoration: none;
+    text-align: center;
 }
 
 .main {
@@ -58,5 +68,9 @@ body {
     body {
         background-color: #252525;
         color: white;
+    }
+
+    a {
+        color: deepskyblue;
     }
 }

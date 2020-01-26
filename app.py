@@ -29,8 +29,8 @@ class LoginForm(FlaskForm):
 
 class RegisterForm(FlaskForm):
     username = StringField("Username", validators=[InputRequired(), Length(1, 64, message="Username must be between "
-                                                                                         "1-64 characters in "
-                                                                                         "length.")])
+                                                                                          "1-64 characters in "
+                                                                                          "length.")])
     submit = SubmitField("Register")
 
 
@@ -154,8 +154,10 @@ def register():
                 else:
                     cursor.execute("SELECT TRUE FROM `requests` WHERE `req_username` = %s", (username,))
                     if len(cursor.fetchall()) >= limits["requests"]["username"]:
-                        flash("Too many registration requests have been made for this username. Please try again later.")
-                        return render_template("register.html", title="Register", form=form, email=email["webmaster"]), 429
+                        flash(
+                            "Too many registration requests have been made for this username. Please try again later.")
+                        return render_template("register.html", title="Register", form=form,
+                                               email=email["webmaster"]), 429
                     else:
                         req_id = secrets.token_urlsafe(48)  # As this is Base64 encoded, this is 64 characters long
                         cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
@@ -166,15 +168,21 @@ def register():
                         print("Creating request " + req_id)
                         cursor.execute("INSERT INTO `requests` (`req_id`, `req_username`, `req_time`, `req_useragent`, "
                                        "`req_ip`) VALUES (%s, %s, %s, %s, %s)", (req_id, username, time.strftime(
-                                        "%Y-%m-%d %H:%M:%S"), get_useragent(), get_ip()))
+                            "%Y-%m-%d %H:%M:%S"), get_useragent(), get_ip()))
                         print("Created request.")
 
-                        return make_response(render_template("registered.html", title="Registered", username=username, redirect=url_for("login")))
+                        return make_response(render_template("registered.html", title="Registered", username=username,
+                                                             redirect=url_for("login")))
             else:
                 flash("A user already exists using the given username.")
                 return render_template("register.html", title="Register", form=form, email=email["webmaster"]), 403
         else:
             return render_template("register.html", title="Register", form=form, email=email["webmaster"])
+
+
+@app.context_processor
+def inject_user_type():
+    return dict(user_type=get_user_type())
 
 
 # Error Handling
@@ -193,6 +201,12 @@ def get_useragent(full=False):
         return str(request.user_agent)[:256]
     else:
         return str(request.user_agent)
+
+
+def get_user_type():
+    cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
+                   (request.cookies.get("sessionID"),))
+    return cursor.fetchone()
 
 
 def check_logout():

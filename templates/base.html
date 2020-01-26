@@ -2,6 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <link href="https://fonts.googleapis.com/css?family=Raleway&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon-32x32.png') }}" sizes="32x32">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon-16x16.png') }}" sizes="16x16">
+    <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}">
+
     {% if title %}
         <title>{{ title }} | Student Portal</title>
     {% else %}
@@ -16,7 +21,31 @@
 <body>
 <div class="navbar">
     <ul>
+        <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}" class="logo"></a></li>
+
         <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+
+        {% block navbar %}{% endblock %}
+
+        {% if request.path == "/login" %}
+            <li style="float: right; @media (prefers-color-scheme: dark) {
+            background-color: gold;
+            color: black;
+            } @media (prefers-color-scheme: light) {
+            background-color: #303030;
+            color: white;
+            }"><a href="{{ url_for('register') }}">Register</a></li>
+        {% elif request.path == "/register" %}
+            <li style="float: right; @media (prefers-color-scheme: dark) {
+            background-color: gold;
+            color: black;
+            }"><a href="{{ url_for('login') }}">Sign In</a></li>
+        {% else %}
+            <li style="float: right; @media (prefers-color-scheme: dark) {
+            background-color: gold;
+            color: black;
+            }"></li>
+        {% endif %}
     </ul>
 </div>
 
