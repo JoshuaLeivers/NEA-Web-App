@@ -11,7 +11,7 @@ from flask_bcrypt import Bcrypt
 import onetimepass
 import base64
 
-from wtforms import StringField, PasswordField, SubmitField, BooleanField
+from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
 from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
 
 
@@ -35,11 +35,12 @@ class RegisterForm(FlaskForm):
 
 
 class RegisterConfirmForm(FlaskForm):
+    req_id = HiddenField("Request", validators=[DataRequired(), Length()]) # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
     password_confirm = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password")])
-    tfa = BooleanField("Setup Two Factor Authentication?")
+    tfa = BooleanField("Setup Two Factor Authentication?", default=True)
     submit = SubmitField("Confirm")
 
 
@@ -93,20 +94,28 @@ else:
 @app.route("/")
 @app.route("/dashboard")
 def dashboard():
-    if check_logout():
-        resp = make_response(redirect(url_for("login")))
-        resp.set_cookie("sessionID", "", max_age=0)
-        return resp
-    return render_template("dashboard.html")
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            return redirect("logout")
+    else:
+        if get_user_type() == 0:
+            return render_template("dashboard_student.html")
+        elif get_user_type() == 1:
+            return render_template("dashboard_staff.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
+@app.route("/signin", methods=["GET"])
 def login():
     origin = get_redirect("login")
     logout = check_logout()
     if not logout:
-        # TODO: Make a separate function that decides which ban page to display, then add a check here to use it
-        return redirect(origin, 302)
+        return redirect(origin, 303)
+    elif isinstance(logout, Bans):
+        return banned(logout)
     else:
         form = LoginForm()
         if form.validate_on_submit():
@@ -118,7 +127,7 @@ def login():
                 if hashed is None:  # If there is no password set for the user
                     return redirect(url_for("reset") + "?user=" + form.username.data, code=303)
                 elif not bcrypt.check_password_hash(hashed, form.password.data):  # If the password is not correct
-                    return render_template("login.html", form=form, error="Username or password is incorrect.")
+                    return render_template("login.html", form=form, error="Username or password is incorrect."), 403
                 else:
                     if not secret:
                         return start_session(form.username.data, origin)
@@ -129,16 +138,19 @@ def login():
                 flash("Username or password is incorrect.")
                 resp = make_response(
                     render_template("login.html", form=form, error="Username or password is incorrect."))
-                resp.set_cookie("sessionID", "", max_age=0)
-                return resp
+                resp.delete_cookie("sessionID")
+                return resp, 403
         else:
             return make_response(render_template("login.html", title="Sign In", form=form))
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if not check_logout():
-        return redirect(get_redirect("register"))
+    logout = check_logout()
+    if not logout:
+        return redirect(get_redirect("register"), 303)
+    elif isinstance(logout, Bans):
+        return banned(logout)
     else:
         form = RegisterForm()
         if form.validate_on_submit():
@@ -180,9 +192,64 @@ def register():
             return render_template("register.html", title="Register", form=form, email=email["webmaster"])
 
 
+@app.route("/register/confirm", methods=["GET", "POST"])
+def register_confirm():
+    logout = check_logout()
+    if not logout:
+        return redirect(get_redirect("register/confirm"), 303)
+    elif isinstance(logout, Bans):
+        return banned(logout)
+    else:
+        form = RegisterConfirmForm()
+        if form.validate_on_submit():
+
+
+
+
+@app.route("/logout")
+def logout():
+    resp = make_response(redirect("login", 303))
+    resp.delete_cookie("sessionID")
+    resp.headers.set("Referer", request.referrer)
+    return resp
+
+
+def banned(bans):
+    bans = bans.bans
+    if any(ban["visible"] == 0 for ban in bans.bans):
+        abort(500)
+    else:
+        baninfo = ""
+        for ban in bans.bans:
+            if ban["visible"] < 5:
+                if ban["visible"] < 4:
+                    ban["admin"] = None
+                    if ban["visible"] < 3:
+                        ban["reason"] = None
+                        if ban["visible"] < 2:
+                            ban["start"] = None
+
+            baninfo = ban
+            if not any(ban["visible"] == 51 for ban in bans.bans):
+                if baninfo["username"] is None:
+                    break
+                elif baninfo["ip"] is None and not any(banned["username"] is None for banned in bans.bans):
+                    break
+                elif not any(banned["ip"] is None or banned["username"] is None for banned in bans.bans):
+                    break
+            else:
+                if baninfo["visible"] == 51:
+                    break
+
+        if baninfo["visible"] == 51:
+            return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
+        else:
+            return make_response(render_template("err_banned.html", ban=baninfo), 403)
+
+
 @app.context_processor
 def inject_user_type():
-    return dict(user_type=get_user_type())
+    return dict(user_type=get_user_type()) # TODO: Remove this if there are no pages that require this
 
 
 # Error Handling
@@ -258,35 +325,7 @@ def check_ban(ip, username):
 def start_session(username, origin):
     bans = check_ban(get_ip(), username)
     if bans:
-        if any(ban["visible"] == 0 for ban in bans.bans):
-            abort(500)
-        else:
-            baninfo = ""
-            for ban in bans.bans:
-                if ban["visible"] < 5:
-                    if ban["visible"] < 4:
-                        ban["admin"] = None
-                        if ban["visible"] < 3:
-                            ban["reason"] = None
-                            if ban["visible"] < 2:
-                                ban["start"] = None
-
-                baninfo = ban
-                if not any(ban["visible"] == 51 for ban in bans.bans):
-                    if baninfo["username"] is None:
-                        break
-                    elif baninfo["ip"] is None and not any(banned["username"] is None for banned in bans.bans):
-                        break
-                    elif not any(banned["ip"] is None or banned["username"] is None for banned in bans.bans):
-                        break
-                else:
-                    if baninfo["visible"] == 51:
-                        break
-
-            if baninfo["visible"] == 51:
-                return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
-            else:
-                return make_response(render_template("err_banned.html", ban=baninfo), 403)
+        return banned(bans)
     else:
         # These are the characters allowed within a cookie value
         chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!#$%&'()*+-./:<=>?@[]^_`{|}~"
