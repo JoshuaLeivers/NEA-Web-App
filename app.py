@@ -1,7 +1,9 @@
+import hashlib
 import secrets
 import time
 from urllib.parse import urlparse
 
+import requests
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash
 import mysql.connector
 from flask_wtf import FlaskForm, CSRFProtect
@@ -35,7 +37,8 @@ class RegisterForm(FlaskForm):
 
 
 class RegisterConfirmForm(FlaskForm):
-    req_id = HiddenField("Request", validators=[DataRequired(), Length(64, 64)]) # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
+    req_id = HiddenField("Request", validators=[DataRequired(), Length(64,
+                                                                       64)])  # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
@@ -154,7 +157,7 @@ def register():
     else:
         form = RegisterForm()
         if form.validate_on_submit():
-            cursor.execute("DELETE FROM `requests` WHERE `req_time` < DATE_SUB(NOW(), INTERVAL 30 MINUTE)")
+            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();")
 
             username = form.username.data
             cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
@@ -177,11 +180,9 @@ def register():
                             req_id = secrets.token_urlsafe(48)
                             cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
 
-                        print("Creating request " + req_id)
                         cursor.execute("INSERT INTO `requests` (`req_id`, `req_username`, `req_time`, `req_useragent`, "
                                        "`req_ip`) VALUES (%s, %s, %s, %s, %s)", (req_id, username, time.strftime(
                             "%Y-%m-%d %H:%M:%S"), get_useragent(), get_ip()))
-                        print("Created request.")
 
                         return make_response(render_template("registered.html", title="Registered", username=username,
                                                              redirect=url_for("login")))
@@ -202,9 +203,32 @@ def register_confirm():
     else:
         form = RegisterConfirmForm()
         if form.validate_on_submit():
+            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();")
 
-
-
+            cursor.execute("SELECT `req_username` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+            username = cursor.fetchone()
+            if not username:
+                flash("Account creation request expired or invalid.")
+                return redirect("register", 303)
+            else:
+                username = username[0]
+                cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
+                if cursor.fetchone():
+                    flash("The account '" + username + "' already exists.")
+                    return redirect("login", 303)
+                else:
+                    password = form.password.data
+                    invalid = check_password_invalid(password)
+                    if invalid:
+                        flash(invalid)
+                        return render_template("register_confirm.html"), 422
+                    else:
+                        cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
+                                       (username, password))
+                        return start_session(username, "register/confirm",
+                                             (form.tfa.data and url_for("settings/tfa") or url_for("dashboard")))
+        elif request.method == "GET" and request.args.get("id") is not None:
+            # TODO: Continue from here. Add check for valid request, render template if true. If not, redirect to register page, flash reason.
 
 
 @app.route("/logout")
@@ -250,7 +274,7 @@ def banned(bans):
 
 @app.context_processor
 def inject_user_type():
-    return dict(user_type=get_user_type()) # TODO: Remove this if there are no pages that require this
+    return dict(user_type=get_user_type())  # TODO: Remove this if there are no pages that require this
 
 
 # Error Handling
@@ -275,6 +299,30 @@ def get_user_type():
     cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
                    (request.cookies.get("sessionID"),))
     return cursor.fetchone()
+
+
+def check_password_pwned(password):
+    password = hashlib.sha1(password)
+    req = requests.get("https://api.pwnedpasswords.com/range/" + password[:5])
+    if req.status_code == 200:
+        if password in req.text:
+            return True
+        else:
+            return False
+    else:
+        print("WARNING: Unable to contact https://api.pwnedpasswords.com/")
+        return False
+
+
+def check_password_invalid(password):
+    if not 9 < len(password) < 73:
+        return "Passwords must be between 10 and 72 characters in length."
+    elif check_password_pwned(password):
+        return "The password you have attempted to use has been breached in the past. If you use this password " \
+               "elsewhere, your accounts may be vulnerable. Please do not reuse passwords, and please change your " \
+               "passwords anywhere you have used this password. "
+    else:
+        return False
 
 
 def check_logout():
@@ -325,7 +373,7 @@ def check_ban(ip, username):
         return False
 
 
-def start_session(username, origin):
+def start_session(username, origin, target=None):
     bans = check_ban(get_ip(), username)
     if bans:
         return banned(bans)
@@ -338,8 +386,9 @@ def start_session(username, origin):
         cursor.execute("INSERT INTO sessions (sess_id, username, sess_start, sess_last, sess_ip, sess_useragent) VALUES"
                        "(%s, %s, NOW(), NOW(), %d, %s)", (sess_id, username, get_ip(), request.user_agent.string))
 
-        resp = redirect((request.referrer and url_for(request.referrer)[:request.url_root.len] == request.url_root) or
-                        url_for(request.args.get("redirect")) or url_for("home"), 302)
+        if target is None:
+            target = get_redirect(origin)
+        resp = redirect(url_for(target), 303)
         resp.set_cookie("sessionID", sess_id, max_age=None, samesite=True, secure=True, httponly=True)
         return resp
 
