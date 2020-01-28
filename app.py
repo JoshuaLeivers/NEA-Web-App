@@ -35,7 +35,7 @@ class RegisterForm(FlaskForm):
 
 
 class RegisterConfirmForm(FlaskForm):
-    req_id = HiddenField("Request", validators=[DataRequired(), Length()]) # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
+    req_id = HiddenField("Request", validators=[DataRequired(), Length(64, 64)]) # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
@@ -206,6 +206,7 @@ def register_confirm():
 
 
 
+
 @app.route("/logout")
 def logout():
     resp = make_response(redirect("login", 303))
@@ -277,6 +278,7 @@ def get_user_type():
 
 
 def check_logout():
+    cursor.execute("CALL BANS_REMOVEOLD(); CALL SESSIONS_REMOVEOLD(); CALL ETC_REMOVEBANNED();")
     cookies = request.cookies
     if not cookies.get("sessionID") is None:
         session = cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
@@ -299,6 +301,7 @@ def check_logout():
 
 
 def check_ban(ip, username):
+    cursor.execure("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();")
     banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, "
                              "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d "
                              "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND "
@@ -327,6 +330,7 @@ def start_session(username, origin):
     if bans:
         return banned(bans)
     else:
+        cursor.execute("CALL SESSIONS_REMOVEOLD();")
         # These are the characters allowed within a cookie value
         chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890!#$%&'()*+-./:<=>?@[]^_`{|}~"
         sess_id = "".join(secrets.choice(chars) for i in range(32))
