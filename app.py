@@ -1,20 +1,94 @@
 import hashlib
+import os
 import secrets
 import time
+from datetime import timedelta
 from urllib.parse import urlparse
-
 import requests
-from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash
+from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
 import mysql.connector
+from flask_mail import Mail, Message
 from flask_wtf import FlaskForm, CSRFProtect
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
 from flask_bcrypt import Bcrypt
 import onetimepass
 import base64
-
+import argparse
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
 from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
+
+
+parser = argparse.ArgumentParser(description="Configure web application variables.")
+
+parser.add_argument("--db-domain", default="127.0.0.1", help="provide a domain to connect to the MySQL database ("
+                                                             "default: '127.0.0.1')")
+parser.add_argument("--db-port", default="3306", help="provide a port to connect to the MySQL database (default: "
+                                                      "'3306')")
+parser.add_argument("--db-username", default="root", help="provide a username to connect to the MySQL database ("
+                                                          "default: 'root')")
+parser.add_argument("--db-password", default=None, help="provide a password to connect to the MySQL database ("
+                                                        "default: None)")
+parser.add_argument("--db-database", default="portal", help="provide a database name to connect to on the MySQL "
+                                                            "database (default: 'portal')")
+
+parser.add_argument("--email-domain", default="smtp.office365.com", help="provide a domain to connect to the email "
+                                                                         "server via SMTP (default: 'smtp.office365'"
+                                                                         "'.com')")
+parser.add_argument("--email-port", default="587", help="provide a port to connect to the email server via SMTP ("
+                                                        "default: '587')")
+parser.add_argument("--email-tls", action="store_true", help="use TLS to connect to the SMTP server (recommended)")
+parser.add_argument("--email-ssl", action="store_true", help="use SSL to connect to the SMTP server")
+parser.add_argument("--email-username", help="provide a username to connect to the SMTP server (required)",
+                    required=True)
+parser.add_argument("--email-password", help="provide a password to connect to the SMTP server (required)",
+                    required=True)
+parser.add_argument("--email-sender-default", help="provide a default sender (email address) for sending emails from "
+                                                   "the SMTP server (required)", required=True)
+parser.add_argument("--email-sender-accounts", default=None, help="provide a sender (email address) for sending "
+                                                                  "emails about user accounts from the SMTP (uses "
+                                                                  "default sender if not set)")
+
+try:
+    args = parser.parse_args()
+except argparse.ArgumentError as err:
+    print("Test")
+
+db = {
+    "domain": args["db-domain"],
+    "port": args["db-port"],
+    "username": args["db-username"],
+    "password": args["db-password"],
+    "database": args["db-database"]
+}
+
+email = {
+    "domain": args["email-domain"],
+    "port": args["email-port"],
+    "username": args["email-username"],
+    "password": args["email-password"],
+    "tls": args["email-tls"],
+    "ssl": args["email-ssl"],
+    "senders": {
+        "default": args["email-sender-default"],
+        "accounts": args["email-sender-accounts"] or args["email-sender-default"]
+    }
+}
+
+limits = {
+    "requests": {
+        "user": args["limit-requests-user"],
+        "ip": args["limit-requests-ip"]
+    },
+    "sessions": {
+        "user": args["limit-sessions-user"],
+        "ip": args["limit-sessions-ip"]
+    },
+    "exemptions": {
+        "users": args["limit-exemptions-ips"],
+        "ips": args["limit-exemptions-ips"]
+    }
+}
 
 
 class Bans:
@@ -25,7 +99,7 @@ class Bans:
 class LoginForm(FlaskForm):
     username = StringField("Username", validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
-    token = StringField("Token", validators=[Length(6, 6)])
+    token = StringField("Token")
     submit = SubmitField("Sign In")
 
 
@@ -51,18 +125,7 @@ class RegisterTFAForm(FlaskForm):
     token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
     submit = SubmitField("Verify")
 
-
-# CONFIG VALUES
-db_user = "root"
-db_pass = "$Z8BQb@zktI2Fst@"
-db_host = "localhost"
-db_name = "portal"
-
-email = {
-    "legal": "joshua@leivers.dev",
-    "webmaster": "joshua@leivers.dev",
-    "enquiries": "joshua@leivers.dev"
-}
+ip_school = "77.111.227.3"  # This is the UoN-Guest IP. Change this when necessary.
 
 limits = {
     "requests": {
@@ -75,6 +138,7 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = b'\xd91Oi~i\xcc\xdb5\xffWT\xea\xa2\xf6\xeb'  # Generated by os.urandom(16)
 bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
+mail = Mail(app)
 
 try:
     cnx = mysql.connector.connect(user=db_user, password=db_pass, host=db_host, database=db_name, autocommit=True)
@@ -94,6 +158,12 @@ else:
     cursor = cnx.cursor()
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return send_from_directory(os.path.join(app.root_path, "static"), "favicon.ico",
+                               mimetype="image/vnd.microsoft.icon")
+
+
 @app.route("/")
 @app.route("/dashboard")
 def dashboard():
@@ -110,8 +180,8 @@ def dashboard():
             return render_template("dashboard_staff.html")
 
 
-@app.route("/login", methods=["GET", "POST"])
 @app.route("/signin", methods=["GET"])
+@app.route("/login", methods=["GET", "POST"])
 def login():
     origin = get_redirect("login")
     logout = check_logout()
@@ -122,15 +192,18 @@ def login():
     else:
         form = LoginForm()
         if form.validate_on_submit():
-            user = cursor.execute("SELECT `password`, `2fa` FROM `users` WHERE `username` = %s", [form.username.data])
+            cursor.execute("SELECT `password`, `2fa` FROM `users` WHERE `username` = %s", [form.username.data])
+            user = cursor.fetchone()
             if user is not None:  # If there is a user by the given username
-                user = user.fetchone()
                 hashed, secret = [user[i] for i in range(2)]
 
                 if hashed is None:  # If there is no password set for the user
                     return redirect(url_for("reset") + "?user=" + form.username.data, code=303)
                 elif not bcrypt.check_password_hash(hashed, form.password.data):  # If the password is not correct
-                    return render_template("login.html", form=form, error="Username or password is incorrect."), 403
+                    flash("Username or password is incorrect.")
+                    resp = make_response(render_template("login.html", form=form))
+                    resp.delete_cookie("sessionID")
+                    return resp, 403
                 else:
                     if not secret:
                         return start_session(form.username.data, origin)
@@ -139,12 +212,15 @@ def login():
                             return start_session(form.username.data, origin)
             else:
                 flash("Username or password is incorrect.")
-                resp = make_response(
-                    render_template("login.html", form=form, error="Username or password is incorrect."))
+                resp = make_response(render_template("login.html", form=form))
                 resp.delete_cookie("sessionID")
                 return resp, 403
         else:
-            return make_response(render_template("login.html", title="Sign In", form=form))
+            if request.args.get("username") is not None:
+                form.username.data = request.args.get("username")
+            resp = make_response(render_template("login.html", title="Sign In", form=form))
+            resp.delete_cookie("sessionID")
+            return resp
 
 
 @app.route("/register", methods=["GET", "POST"])
@@ -157,7 +233,7 @@ def register():
     else:
         form = RegisterForm()
         if form.validate_on_submit():
-            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();")
+            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
             username = form.username.data
             cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
@@ -179,6 +255,29 @@ def register():
                         while cursor.fetchall():
                             req_id = secrets.token_urlsafe(48)
                             cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
+
+                        url = url_for("register_confirm") + "?" + req_id
+
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@nuast.org"],
+                                      sender=("Student Portal", "joshua@leivers.dev"))
+                        msg.html = "<h2>Confirm your student portal account</h2>" \
+                                   "<p>Never share this email or the links it contains! Anybody with your " \
+                                   "confirmation link can create and access an account in your name!</p>" \
+                                   "<p>You recently requested an account for the NUAST student portal. " \
+                                   "To confirm your account, click <a href='" + url + "'>here</a>.</p>" + \
+                                   "<p>Can't click the link? Copy and paste the following URL into your browser:</p>" \
+                                   "<p><a href='" + url + "'>" + url + "</a></p>" + \
+                                   "<p>Didn't request this? Don't worry. You can just ignore this email, or use the " \
+                                   "link yourself anyway. Nobody will be able to access your account unless they " \
+                                   "themselves use this link, so make sure to keep it private!</p>" \
+                                   "<h4>Who requested this?</h4>" \
+                                   "<p><b>IP</b>: " + request.remote_addr + (request.remote_addr == ip_school and
+                                                                             "NUAST") + \
+                                   "</p>" + \
+                                   "<p><b>Browser</b>: " + request.user_agent.browser + " " + \
+                                   request.user_agent.version + \
+                                   "</p>" + \
+                                   "<p><b>Operating System</b>: " + request.user_agent.platform + "</p>"
 
                         cursor.execute("INSERT INTO `requests` (`req_id`, `req_username`, `req_time`, `req_useragent`, "
                                        "`req_ip`) VALUES (%s, %s, %s, %s, %s)", (req_id, username, time.strftime(
@@ -203,9 +302,9 @@ def register_confirm():
     else:
         form = RegisterConfirmForm()
         if form.validate_on_submit():
-            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();")
+            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-            cursor.execute("SELECT `req_username` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+            cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
             username = cursor.fetchone()
             if not username:
                 flash("Account creation request expired or invalid.")
@@ -215,7 +314,7 @@ def register_confirm():
                 cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
                 if cursor.fetchone():
                     flash("The account '" + username + "' already exists.")
-                    return redirect("login", 303)
+                    return redirect(url_for("login") + "?username=" + username, 303)
                 else:
                     password = form.password.data
                     invalid = check_password_invalid(password)
@@ -228,7 +327,21 @@ def register_confirm():
                         return start_session(username, "register/confirm",
                                              (form.tfa.data and url_for("settings/tfa") or url_for("dashboard")))
         elif request.method == "GET" and request.args.get("id") is not None:
-            # TODO: Continue from here. Add check for valid request, render template if true. If not, redirect to register page, flash reason.
+            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
+
+            cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
+                           (request.args.get("id"),))
+            data = cursor.fetchone()
+            if data is None:
+                flash("Account creation request expired or invalid.")
+                return redirect(url_for("register"), 303)
+            else:
+                username = data[0]
+                expires = data[1] + timedelta(minutes=30)
+                return render_template("register_confirm.html", title="Confirm Registration", username=username,
+                                       expires=expires, form=form)
+        else:
+            return redirect(url_for("register"))
 
 
 @app.route("/logout")
@@ -270,11 +383,6 @@ def banned(bans):
             return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
         else:
             return make_response(render_template("err_banned.html", ban=baninfo), 403)
-
-
-@app.context_processor
-def inject_user_type():
-    return dict(user_type=get_user_type())  # TODO: Remove this if there are no pages that require this
 
 
 # Error Handling
@@ -326,9 +434,9 @@ def check_password_invalid(password):
 
 
 def check_logout():
-    cursor.execute("CALL BANS_REMOVEOLD(); CALL SESSIONS_REMOVEOLD(); CALL ETC_REMOVEBANNED();")
+    cursor.execute("CALL BANS_REMOVEOLD(); CALL SESSIONS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
     cookies = request.cookies
-    if not cookies.get("sessionID") is None:
+    if cookies.get("sessionID") is not None:
         session = cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
                                  "`sess_id` = %s", cookies.get("sessionID")).fetchone()
         if session:
@@ -346,10 +454,11 @@ def check_logout():
             return True
     else:
         return True
+    # TODO FIX THIS: Attempting a login twice returns an unread result somewhere here
 
 
 def check_ban(ip, username):
-    cursor.execure("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();")
+    cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
     banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, "
                              "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d "
                              "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND "
@@ -407,4 +516,4 @@ def get_redirect(this):
 
 
 if __name__ == '__main__':
-    app.run()
+    app.run(ssl_context="adhoc")

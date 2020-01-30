@@ -5,7 +5,10 @@
       <w>bcrypt</w>
       <w>navbar</w>
       <w>nuast</w>
+      <w>removebanned</w>
+      <w>removeold</w>
       <w>signin</w>
+      <w>smtp</w>
     </words>
   </dictionary>
 </component>
