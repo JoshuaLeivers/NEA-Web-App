@@ -30,15 +30,15 @@ db = {
 }
 
 email = {
-    "domain": config["Email"]["Domain"],
-    "port": config["Email"]["Port"],
-    "username": config["Email"]["Username"],
-    "password": config["Email"]["Password"],
-    "tls": config["Email"].getboolean("TLS"),
-    "ssl": config["Email"].getboolean("SSL"),
+    "domain": config.get("Email", "Domain"),
+    "port": config.get("Email", "Port"),
+    "username": config.get("Email", "Username"),
+    "password": config.get("Email", "Password"),
+    "tls": config.getboolean("Email", "TLS"),
+    "ssl": config.getboolean("Email", "SSL"),
     "senders": {
-        "default": config["Email"][""],
-        "accounts": args["email-sender-accounts"] or args["email-sender-default"] # TODO: Convert fully to config instead of args, make sure lists are handled correctly, and add try except clauses to make sure values are valid
+        "default": config.get("Email", "Default Sender"),
+        "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender") # TODO: Convert fully to config instead of args, make sure lists are handled correctly, and add try except clauses to make sure values are valid
     }
 }
 
