@@ -3,6 +3,7 @@
     <words>
       <w>baninfo</w>
       <w>bcrypt</w>
+      <w>configparser</w>
       <w>navbar</w>
       <w>nuast</w>
       <w>removebanned</w>

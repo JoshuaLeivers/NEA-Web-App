@@ -19,50 +19,185 @@ from wtforms import StringField, PasswordField, SubmitField, BooleanField, Hidde
 from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
 
 
+class Error(Exception):
+    """Base class for exceptions in this app."""
+
+    def __init__(self, message):
+        self.message = message
+        Exception.__init__(self, message)
+
+    def __repr__(self):
+        return self.message
+
+    __str__ = __repr__
+
+
+class ConfigSectionError(Error):
+    """Exception raised when configparser cannot find a given section.
+
+    Attributes:
+        section -- section which configparser could not find
+    """
+
+    def __init__(self, section):
+        Error.__init__(self, section + " section in config does not exist. Please configure "
+                           + section + ". Resetting to defaults.")
+        self.section = section
+        self.args = (section,)
+
+
+class ConfigOptionError(Error):
+    """Exception raised when configparser cannot find a given option.
+
+    Attributes:
+        option -- option which configparser cannot find
+        section -- section which the option should be in
+    """
+
+    def __init__(self, option, section):
+        Error.__init__(self, option + " missing from " + section + " section. Please configure " + section + " settings. Resetting to default.")
+        self.option = option
+        self.section = section
+        self.args = (option, section)
+
+
+class ConfigInvalidValueError(Error):
+    """Exception raised when a config value is invalid.
+
+    Attributes:
+        key -- the config key whose value is invalid
+    """
+
+    def __init__(self, option, section):
+        Error.__init__(self, "The " + option + "value for the " + section + "section of the config.ini is invalid. "
+                                                                            "Reconfigure to continue operating the "
+                                                                            "web app.")
+        self.option = option
+        self.section = section
+        self.args = (option, section)
+
+
+defaults = {
+    "Database": {
+        "Domain": "127.0.0.1",
+        "Port": "3306",
+        "Username": "root",
+        "Password": "",
+        "Database": "portal"
+    },
+    "Email": {
+        "Domain": "127.0.0.1",
+        "Port": "587",
+        "Username": "",
+        "Password": "",
+        "TLS": "True",
+        "SSL": "False",
+        "Default Sender": "joshua@leivers.dev",
+        "Accounts Sender": "joshua@leivers.dev"
+    },
+    "Limits": {
+        "User Requests": 5,
+        "IP Requests": 20,
+        "User Sessions": 7,
+        "IP Sessions": 30,
+        "Exempt Users": "",
+        "Exempt IPs": "77.111.227.3 81.97.245.234"
+    }
+}
+
+
 config = configparser.ConfigParser()
+config.read("config.ini")
 
-db = {
-    "domain": config["Database"]["Domain"],
-    "port": config["Database"]["Port"],
-    "username": config["Database"]["Username"],
-    "password": config["Database"]["Password"],
-    "database": config["Database"]["Name"]
-}
-
-email = {
-    "domain": config.get("Email", "Domain"),
-    "port": config.get("Email", "Port"),
-    "username": config.get("Email", "Username"),
-    "password": config.get("Email", "Password"),
-    "tls": config.getboolean("Email", "TLS"),
-    "ssl": config.getboolean("Email", "SSL"),
-    "senders": {
-        "default": config.get("Email", "Default Sender"),
-        "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender") # TODO: Convert fully to config instead of args, make sure lists are handled correctly, and add try except clauses to make sure values are valid
+try:
+    db = {
+        "domain": config.get("Database", "Domain"),
+        "port": config.get("Database", "Port"),
+        "username": config.get("Database", "Username"),
+        "password": config.get("Database", "Password"),
+        "database": config.get("Database", "Database")
     }
-}
+except configparser.NoSectionError:
+    config["Database"] = defaults["Database"]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
 
-limits = {
-    "requests": {
-        "user": args["limit-requests-user"],
-        "ip": args["limit-requests-ip"]
-    },
-    "sessions": {
-        "user": args["limit-sessions-user"],
-        "ip": args["limit-sessions-ip"]
-    },
-    "exemptions": {
-        "users": args["limit-exemptions-ips"],
-        "ips": args["limit-exemptions-ips"]
+    raise ConfigSectionError("Database")
+except configparser.NoOptionError as err:
+    config["Database"][err.option] = defaults["Database"][err.option]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
+
+    raise ConfigOptionError(err.option, "Database")
+
+if db["domain"] is None:
+    raise ConfigInvalidValueError("domain", "database")
+if db["port"] is None:
+    raise ConfigInvalidValueError("port", "database")
+if db["username"] is None:
+    raise ConfigInvalidValueError("username", "database")
+if db["database"] is None or db["database"] in ["mysql", "information_schema", "performance_schema"]:
+    raise ConfigInvalidValueError("database", "database") # TODO: Add checks for other dicts
+
+
+try:
+    email = {
+        "domain": config.get("Email", "Domain"),
+        "port": config.get("Email", "Port"),
+        "username": config.get("Email", "Username"),
+        "password": config.get("Email", "Password"),
+        "tls": config.getboolean("Email", "TLS"),
+        "ssl": config.getboolean("Email", "SSL"),
+        "senders": {
+            "default": config.get("Email", "Default Sender"),
+            "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender")
+            # TODO: Convert fully to config instead of args, make sure lists are handled correctly, and add try except
+            #  clauses to make sure values are valid
+        }
     }
-}
+except configparser.NoSectionError:
+    config["Email"] = defaults["Email"]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
+
+    raise ConfigSectionError("Email")
+except configparser.NoOptionError as err:
+    config["Email"][err.option] = defaults["Email"][err.option]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
+
+    raise ConfigOptionError(err.option, "Email")
+
+try:
+    limits = {
+        "requests": {
+            "user": config.getint("Limits", "User Requests"),
+            "ip": config.getint("Limits", "IP Requests")
+        },
+        "sessions": {
+            "user": config.getint("Limits", "User Sessions"),
+            "ip": config.getint("Limits", "IP Sessions")
+        },
+        "exemptions": {
+            "users": config.get("Limits", "Exempt Users").split(),  # By default, split() separates a string by whitespace
+            "ips": config.get("Limits", "Exempt IPs").split()
+        }
+    }
+except configparser.NoSectionError:
+    config["Limits"] = defaults["Limits"]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
+
+    raise ConfigSectionError("Limits")
 
 
+# Class used to be able to test if when a user is logged out it is because of a ban, and to store the bans for use
 class Bans:
     def __init__(self, bans):
         self.bans = bans
 
 
+# WTForms Templates
 class LoginForm(FlaskForm):
     username = StringField("Username", validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
@@ -92,7 +227,6 @@ class RegisterTFAForm(FlaskForm):
     token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
     submit = SubmitField("Verify")
 
-ip_school = "77.111.227.3"  # This is the UoN-Guest IP. Change this when necessary.
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = b'\xd91Oi~i\xcc\xdb5\xffWT\xea\xa2\xf6\xeb'  # Generated by os.urandom(16)
@@ -101,7 +235,8 @@ csrf = CSRFProtect(app)
 mail = Mail(app)
 
 try:
-    cnx = mysql.connector.connect(user=db_user, password=db_pass, host=db_host, database=db_name, autocommit=True)
+    cnx = mysql.connector.connect(user=db.get("Username"), password=db.get("Password"), host=db.get("Domain"),
+                                  port=db.get("Port"), database=db.get("Database"), autocommit=True)
 except mysql.connector.Error as err:
     if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
         print("ERROR: The username or password for the database is incorrect. [" + err.errno + "]")
