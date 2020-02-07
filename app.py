@@ -253,6 +253,9 @@ class RegisterConfirmForm(FlaskForm):
     tfa = BooleanField("Setup Two Factor Authentication?", default=True)
     submit = SubmitField("Confirm")
 
+class RegisterConfirmCodeForm(FlaskForm):
+    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)]) # TODO: Add correct length
+    submit = SubmitField("Confirm")
 
 class RegisterTFAForm(FlaskForm):
     token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
@@ -386,13 +389,14 @@ def register():
                     else:
                         req_id = secrets.token_urlsafe(48)  # As this is Base64 encoded, this is 64 characters long
                         cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
-                        while cursor.fetchall():
+                        while cursor.fetchone():
                             req_id = secrets.token_urlsafe(48)
                             cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
 
                         url = url_for("register_confirm") + "?id=" + req_id
 
-                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"], # TODO: Change to nuast.org when complete
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"],
+                                      # TODO: Change to nuast.org when complete
                                       sender=("Student Portal", "joshua@leivers.dev"))
                         msg.html = "<h2>Confirm your student portal account</h2>" + \
                                    "<p>Never share this email or the links it contains! Anybody with your " + \
@@ -438,7 +442,6 @@ def register_confirm():
     else:
         form = RegisterConfirmForm()
         if form.validate_on_submit():
-            print("validated")
             cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
             cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
@@ -461,25 +464,48 @@ def register_confirm():
                     else:
                         cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
                                        (username, bcrypt.generate_password_hash(password)))
-                        return start_session(username, "register/confirm",
-                                             (form.tfa.data and url_for("settings/tfa") or url_for("dashboard")))
-        elif request.method == "GET" and request.args.get("id") is not None:
+                        return start_session(username, "register_confirm",
+                                             (form.tfa.data and url_for("settings_tfa") or url_for("dashboard")))
+        elif request.method == "GET":
+            if request.args.get("id") is not None:
+                cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
+
+                cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
+                               (request.args.get("id"),))
+                data = cursor.fetchone()
+                if data is None:
+                    flash("Account creation request expired or invalid.")
+                    return redirect(url_for("register"), 303)
+                else:
+                    form.req_id.data = request.args.get("id")
+                    username = data[0]
+                    expires = data[1] + timedelta(minutes=30)
+                    return render_template("register_confirm.html", title="Confirm Registration", username=username,
+                                           expires=expires, form=form)
+            else:
+                return redirect(url_for("register_confirm_code")), 303
+        else:
+            return redirect(url_for("register_confirm_code")), 303
+
+
+@app.route("/register/confirm/code", methods=["GET", "POST"])
+def register_confirm_code():
+    logout = check_logout()
+    if not logout:
+        return redirect(get_redirect("register_confirm_manual"))
+    elif isinstance(logout, Bans):
+        return banned(logout)
+    else:
+        form = RegisterConfirmCodeForm()
+        if form.validate_on_submit():
             cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-            cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
-                           (request.args.get("id"),))
-            data = cursor.fetchone()
-            if data is None:
-                flash("Account creation request expired or invalid.")
-                return redirect(url_for("register"), 303)
+            cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+            if cursor.fetchone():
+                redirect(url_for("register_confirm") + "?id=" + form.req_id.data)
             else:
-                form.req_id.data = request.args.get("id")
-                username = data[0]
-                expires = data[1] + timedelta(minutes=30)
-                return render_template("register_confirm.html", title="Confirm Registration", username=username,
-                                       expires=expires, form=form)
-        else:
-            return redirect(url_for("register"))
+                flash("") # TODO: Finish code form
+
 
 
 @app.route("/logout")
@@ -581,8 +607,9 @@ def check_logout():
     cursor.execute("CALL BANS_REMOVEOLD(); CALL SESSIONS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
     cookies = request.cookies
     if cookies.get("sessionID") is not None:
-        session = cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
-                                 "`sess_id` = %s", cookies.get("sessionID")).fetchone()
+        cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
+                       "`sess_id` = %s", cookies.get("sessionID"))
+        session = cursor.fetchone()
         if session:
             bans = check_ban(get_ip(), session[1])
             if bans:
@@ -603,13 +630,14 @@ def check_logout():
 
 def check_ban(ip, username):
     cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
-    banlist = cursor.execute("SELECT `username`, `ban_ip`, `staff`, `ban_visible`, `ban_reason`, `ban_start`, "
-                             "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%s "
-                             "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%s AND "
-                             "`username` IS NULL))", (ip, username, username, ip))
+
+    cursor.execute("SELECT `username`, `ban_ip`, `staff`, `ban_visible`, `ban_reason`, `ban_start`, "
+                   "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%s "
+                   "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%s AND "
+                   "`username` IS NULL))", (ip, username, username, ip))
+    banlist = cursor.fetchall()
 
     if banlist is not None:
-        banlist = banlist.fetchall()
         bans = []
         for ban in banlist:
             ban = {
