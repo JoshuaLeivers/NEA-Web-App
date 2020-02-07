@@ -24,6 +24,19 @@ body {
     text-decoration: none;
 }
 
+.navbar li.login {
+    float: right;
+    background-color: gold;
+}
+
+.navbar li.login a {
+    color: black;
+}
+
+.navbar li.login a:hover {
+    background-color: #efc700;
+}
+
 .navbar li a img {
     height: 35px;
     width: 35px;
@@ -36,41 +49,4 @@ body {
 .main {
     padding: 20px;
     margin-top: 30px;
-}
-
-@media (prefers-color-scheme: light) {
-    .navbar ul {
-        background-color: white;
-    }
-
-    .navbar li a {
-        color: black;
-    }
-
-    .navbar li a:hover {
-        background-color: grey;
-    }
-}
-
-@media (prefers-color-scheme: dark) {
-    .navbar ul {
-        background-color: #303030;
-    }
-
-    .navbar li a {
-        color: white;
-    }
-
-    .navbar li a:hover {
-        background-color: #404040;
-    }
-
-    body {
-        background-color: #252525;
-        color: white;
-    }
-
-    a {
-        color: deepskyblue;
-    }
 }

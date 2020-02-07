@@ -20,8 +20,7 @@
     <p>Your password will be checked against a database of breached passwords to ensure that you do not either reuse a password, or use a very basic password.</p>
 
     <form action="{{ url_for('register_confirm') }}" method="post">
-        {{ form.csrf_token }}
-        {{ form.req_id }}
+        {{ form.hidden_tag() }}
 
         <p>
             {{ form.password.label }}

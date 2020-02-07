@@ -21,7 +21,7 @@
     {% elif request.cookies.get("colours") == "light" %}
         <link rel="stylesheet"  type="text/css" href="{{ url_for('static', filename='light.css') }}">
     {% else %}
-        {% request.cookies.delete_cookie("colours") %}
+        {{ request.cookies.delete_cookie("colours") }}
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='default.css') }}">
     {% endif %}
 
@@ -34,28 +34,22 @@
     <ul>
         <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}" class="logo"></a></li>
 
-        <li><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+        <li><a href="{{ url_for('dashboard') }}" class="{{ request.path == '/dashboard' and 'active' }}">Dashboard</a></li>
 
         {% block navbar %}{% endblock %}
 
-        {% if request.path == "/login" %}
-            <li style="float: right; @media (prefers-color-scheme: dark) {
-            background-color: gold;
-            color: black;
-            } @media (prefers-color-scheme: light) {
-            background-color: #303030;
-            color: white;
-            }"><a href="{{ url_for('register') }}">Register</a></li>
-        {% elif request.path == "/register" %}
-            <li style="float: right; @media (prefers-color-scheme: dark) {
-            background-color: gold;
-            color: black;
-            }"><a href="{{ url_for('login') }}">Sign In</a></li>
+        {% if request.cookies.get("colours") %}
+        <li></li>
         {% else %}
-            <li style="float: right; @media (prefers-color-scheme: dark) {
-            background-color: gold;
-            color: black;
-            }"></li>
+        <li></li>
+        {% endif %}
+
+        {% if request.path == "/login" %}
+            <li class="login"><a href="{{ url_for('register') }}">Register</a></li>
+        {% elif request.path == "/register" %}
+            <li class="login"><a href="{{ url_for('login') }}">Sign In</a></li>
+        {% else %}
+            <li class="login"><a href="{{ url_for('logout') }}">Logout</a></li>
         {% endif %}
     </ul>
 </div>

@@ -1,0 +1,24 @@
+.navbar ul {
+    background-color: #303030;
+}
+
+.navbar li a {
+    color: white;
+}
+
+.navbar li a:hover {
+    background-color: dimgrey;
+}
+
+.navbar li a.active {
+
+}
+
+body {
+    background-color: #252525;
+    color: white;
+}
+
+a {
+    color: deepskyblue;
+}

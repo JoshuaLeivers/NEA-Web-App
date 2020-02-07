@@ -2,6 +2,7 @@
   <dictionary name="joshu">
     <words>
       <w>baninfo</w>
+      <w>banlist</w>
       <w>bcrypt</w>
       <w>configparser</w>
       <w>navbar</w>

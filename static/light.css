@@ -1,0 +1,15 @@
+.navbar ul {
+    background-color: white;
+}
+
+.navbar li a {
+    color: black;
+}
+
+.navbar li a:hover {
+    background-color: #f2f2f2;
+}
+
+body {
+    background-color: snow;
+}

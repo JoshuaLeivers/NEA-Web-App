@@ -1,0 +1,28 @@
+@import "light.css";
+
+@media (prefers-color-scheme: dark) {
+    .navbar ul {
+        background-color: #303030;
+    }
+
+    .navbar li a {
+        color: white;
+    }
+
+    .navbar li a:hover {
+        background-color: #404040;
+    }
+
+    .navbar li a.active {
+        background-color: #454545;
+    }
+
+    body {
+        background-color: #252525;
+        color: white;
+    }
+
+    a {
+        color: deepskyblue;
+    }
+}

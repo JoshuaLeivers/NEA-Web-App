@@ -6,6 +6,7 @@ import time
 from datetime import timedelta
 from urllib.parse import urlparse
 import requests
+import validators
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
 import mysql.connector
 from flask_mail import Mail, Message
@@ -41,7 +42,7 @@ class ConfigSectionError(Error):
 
     def __init__(self, section):
         Error.__init__(self, section + " section in config does not exist. Please configure "
-                           + section + ". Resetting to defaults.")
+                       + section + ". Resetting to defaults.")
         self.section = section
         self.args = (section,)
 
@@ -55,7 +56,8 @@ class ConfigOptionError(Error):
     """
 
     def __init__(self, option, section):
-        Error.__init__(self, option + " missing from " + section + " section. Please configure " + section + " settings. Resetting to default.")
+        Error.__init__(self,
+                       option + " missing from " + section + " section. Please configure " + section + " settings. Resetting to default.")
         self.option = option
         self.section = section
         self.args = (option, section)
@@ -68,13 +70,12 @@ class ConfigInvalidValueError(Error):
         key -- the config key whose value is invalid
     """
 
-    def __init__(self, option, section):
-        Error.__init__(self, "The " + option + "value for the " + section + "section of the config.ini is invalid. "
-                                                                            "Reconfigure to continue operating the "
-                                                                            "web app.")
-        self.option = option
+    def __init__(self, options, section):
+        Error.__init__(self, ", ".join(
+            options) + " invalid for the " + section + " section of the config.ini. Reconfigure to continue operating the web app.")
+        self.options = options
         self.section = section
-        self.args = (option, section)
+        self.args = (options, section)
 
 
 defaults = {
@@ -105,7 +106,6 @@ defaults = {
     }
 }
 
-
 config = configparser.ConfigParser()
 config.read("config.ini")
 
@@ -130,15 +130,18 @@ except configparser.NoOptionError as err:
 
     raise ConfigOptionError(err.option, "Database")
 
-if db["domain"] is None:
-    raise ConfigInvalidValueError("domain", "database")
+options = []
+if db["domain"] is None or not (validators.domain(db["domain"]) or validators.ipv4(db["domain"])):
+    options.append("Domain")
 if db["port"] is None:
-    raise ConfigInvalidValueError("port", "database")
+    options.append("Port")
 if db["username"] is None:
-    raise ConfigInvalidValueError("username", "database")
+    options.append("Username")
 if db["database"] is None or db["database"] in ["mysql", "information_schema", "performance_schema"]:
-    raise ConfigInvalidValueError("database", "database") # TODO: Add checks for other dicts
+    options.append("Database")
 
+if len(options) > 0:
+    raise ConfigInvalidValueError(options, "database")
 
 try:
     email = {
@@ -168,6 +171,19 @@ except configparser.NoOptionError as err:
 
     raise ConfigOptionError(err.option, "Email")
 
+options = []
+if email["domain"] is None or not (validators.domain(email["domain"]) or validators.ipv4(email["domain"])):
+    options.append("Domain")
+if email["port"] is None:
+    options.append("Port")
+if email["username"] is None:
+    options.append("Username")
+if email["senders"]["default"] is None or not validators.email(email["senders"]["default"]):
+    options.append("Default Sender")
+
+if len(options) > 0:
+    raise ConfigInvalidValueError(options, "email")
+
 try:
     limits = {
         "requests": {
@@ -179,7 +195,8 @@ try:
             "ip": config.getint("Limits", "IP Sessions")
         },
         "exemptions": {
-            "users": config.get("Limits", "Exempt Users").split(),  # By default, split() separates a string by whitespace
+            "users": config.get("Limits", "Exempt Users").split(),
+            # By default, split() separates a string by whitespace
             "ips": config.get("Limits", "Exempt IPs").split()
         }
     }
@@ -189,6 +206,21 @@ except configparser.NoSectionError:
         config.write(configfile)
 
     raise ConfigSectionError("Limits")
+
+options = []
+if limits["requests"]["user"] is None:
+    options.append("User Requests")
+if limits["requests"]["ip"] is None:
+    options.append("IP Requests")
+if limits["sessions"]["user"] is None:
+    options.append("User Sessions")
+if limits["sessions"]["ip"] is None:
+    options.append("IP Sessions")
+if any(not validators.ipv4(ip) for ip in limits["exemptions"]["ips"]):
+    options.append("Exempt IPs")
+
+if len(options) > 0:
+    raise ConfigInvalidValueError(options, "requests")
 
 
 # Class used to be able to test if when a user is logged out it is because of a ban, and to store the bans for use
@@ -213,8 +245,7 @@ class RegisterForm(FlaskForm):
 
 
 class RegisterConfirmForm(FlaskForm):
-    req_id = HiddenField("Request", validators=[DataRequired(), Length(64,
-                                                                       64)])  # TODO: Add the correct length from documentation. Also, change setup.py so that events to remove old records use a function, so that it can be called easily by the app.
+    req_id = HiddenField("Request", validators=[DataRequired(), Length(64, 64)])
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
@@ -232,11 +263,20 @@ app = Flask(__name__)
 app.config["SECRET_KEY"] = b'\xd91Oi~i\xcc\xdb5\xffWT\xea\xa2\xf6\xeb'  # Generated by os.urandom(16)
 bcrypt = Bcrypt(app)
 csrf = CSRFProtect(app)
+
+app.config["MAIL_SERVER"] = email["domain"]
+app.config["MAIL_PORT"] = email["port"]
+app.config["MAIL_USE_TLS"] = email["tls"]
+app.config["MAIL_USE_SSL"] = email["ssl"]
+app.config["MAIL_USERNAME"] = email["username"]
+app.config["MAIL_PASSWORD"] = email["password"]
+app.config["MAIL_DEFAULT_SENDER"] = email["senders"]["default"]
+
 mail = Mail(app)
 
 try:
-    cnx = mysql.connector.connect(user=db.get("Username"), password=db.get("Password"), host=db.get("Domain"),
-                                  port=db.get("Port"), database=db.get("Database"), autocommit=True)
+    cnx = mysql.connector.connect(user=db.get("username"), password=db.get("password"), host=db.get("domain"),
+                                  port=db.get("port"), database=db.get("database"), autocommit=True)
 except mysql.connector.Error as err:
     if err.errno == errorcode.ER_ACCESS_DENIED_ERROR:
         print("ERROR: The username or password for the database is incorrect. [" + err.errno + "]")
@@ -267,7 +307,7 @@ def dashboard():
         if isinstance(logout, Bans):
             return banned(logout)
         else:
-            return redirect("logout")
+            return redirect("logout", 303)
     else:
         if get_user_type() == 0:
             return render_template("dashboard_student.html")
@@ -336,14 +376,13 @@ def register():
                 cursor.execute("SELECT TRUE FROM `requests` WHERE `req_ip` = %s", (get_ip(),))
                 if len(cursor.fetchall()) >= limits["requests"]["ip"]:
                     flash("Too many registration requests have been made from this IP. Please try again later.")
-                    return render_template("register.html", title="Register", form=form, email=email["webmaster"]), 429
+                    return render_template("register.html", title="Register", form=form), 429
                 else:
                     cursor.execute("SELECT TRUE FROM `requests` WHERE `req_username` = %s", (username,))
-                    if len(cursor.fetchall()) >= limits["requests"]["username"]:
+                    if len(cursor.fetchall()) >= limits["requests"]["user"]:
                         flash(
                             "Too many registration requests have been made for this username. Please try again later.")
-                        return render_template("register.html", title="Register", form=form,
-                                               email=email["webmaster"]), 429
+                        return render_template("register.html", title="Register", form=form), 429
                     else:
                         req_id = secrets.token_urlsafe(48)  # As this is Base64 encoded, this is 64 characters long
                         cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
@@ -351,28 +390,30 @@ def register():
                             req_id = secrets.token_urlsafe(48)
                             cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (req_id,))
 
-                        url = url_for("register_confirm") + "?" + req_id
+                        url = url_for("register_confirm") + "?id=" + req_id
 
-                        msg = Message("Confirm Student Portal Account", recipients=[username + "@nuast.org"],
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"], # TODO: Change to nuast.org when complete
                                       sender=("Student Portal", "joshua@leivers.dev"))
-                        msg.html = "<h2>Confirm your student portal account</h2>" \
-                                   "<p>Never share this email or the links it contains! Anybody with your " \
-                                   "confirmation link can create and access an account in your name!</p>" \
-                                   "<p>You recently requested an account for the NUAST student portal. " \
+                        msg.html = "<h2>Confirm your student portal account</h2>" + \
+                                   "<p>Never share this email or the links it contains! Anybody with your " + \
+                                   "confirmation link can create and access an account in your name!</p>" + \
+                                   "<p>You recently requested an account for the NUAST student portal. " + \
                                    "To confirm your account, click <a href='" + url + "'>here</a>.</p>" + \
-                                   "<p>Can't click the link? Copy and paste the following URL into your browser:</p>" \
+                                   "<p>Can't click the link? Copy and paste the following URL into your browser:</p>" + \
                                    "<p><a href='" + url + "'>" + url + "</a></p>" + \
-                                   "<p>Didn't request this? Don't worry. You can just ignore this email, or use the " \
-                                   "link yourself anyway. Nobody will be able to access your account unless they " \
-                                   "themselves use this link, so make sure to keep it private!</p>" \
-                                   "<h4>Who requested this?</h4>" \
-                                   "<p><b>IP</b>: " + request.remote_addr + (request.remote_addr == ip_school and
-                                                                             "NUAST") + \
-                                   "</p>" + \
+                                   "<p>Didn't request this? Don't worry. You can just ignore this email, or use the " + \
+                                   "link yourself anyway. Nobody will be able to access your account unless they " + \
+                                   "themselves use this link, so make sure to keep it private!</p>" + \
+                                   "<h4>Who requested this?</h4>" + \
+                                   "<p><b>IP</b>: " + request.remote_addr + str((request.remote_addr in
+                                                                                 limits["exemptions"][
+                                                                                     "ips"]) and "NUAST") \
+                                   + "</p>" + \
                                    "<p><b>Browser</b>: " + request.user_agent.browser + " " + \
                                    request.user_agent.version + \
                                    "</p>" + \
                                    "<p><b>Operating System</b>: " + request.user_agent.platform + "</p>"
+                        mail.send(msg)
 
                         cursor.execute("INSERT INTO `requests` (`req_id`, `req_username`, `req_time`, `req_useragent`, "
                                        "`req_ip`) VALUES (%s, %s, %s, %s, %s)", (req_id, username, time.strftime(
@@ -382,9 +423,9 @@ def register():
                                                              redirect=url_for("login")))
             else:
                 flash("A user already exists using the given username.")
-                return render_template("register.html", title="Register", form=form, email=email["webmaster"]), 403
+                return render_template("register.html", title="Register", form=form), 403
         else:
-            return render_template("register.html", title="Register", form=form, email=email["webmaster"])
+            return render_template("register.html", title="Register", form=form)
 
 
 @app.route("/register/confirm", methods=["GET", "POST"])
@@ -397,6 +438,7 @@ def register_confirm():
     else:
         form = RegisterConfirmForm()
         if form.validate_on_submit():
+            print("validated")
             cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
             cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
@@ -418,7 +460,7 @@ def register_confirm():
                         return render_template("register_confirm.html"), 422
                     else:
                         cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
-                                       (username, password))
+                                       (username, bcrypt.generate_password_hash(password)))
                         return start_session(username, "register/confirm",
                                              (form.tfa.data and url_for("settings/tfa") or url_for("dashboard")))
         elif request.method == "GET" and request.args.get("id") is not None:
@@ -431,6 +473,7 @@ def register_confirm():
                 flash("Account creation request expired or invalid.")
                 return redirect(url_for("register"), 303)
             else:
+                form.req_id.data = request.args.get("id")
                 username = data[0]
                 expires = data[1] + timedelta(minutes=30)
                 return render_template("register_confirm.html", title="Confirm Registration", username=username,
@@ -486,6 +529,12 @@ def err_legal():
     return render_template("err_451.html"), 451
 
 
+# Value Injection
+@app.context_processor
+def inject_emails():
+    return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"])
+
+
 # Utility functions
 def get_ip():
     return int.from_bytes(inet_aton(request.remote_addr), "big")
@@ -505,10 +554,10 @@ def get_user_type():
 
 
 def check_password_pwned(password):
-    password = hashlib.sha1(password)
-    req = requests.get("https://api.pwnedpasswords.com/range/" + password[:5])
+    password = hashlib.sha1(password.encode("utf-8"))
+    req = requests.get("https://api.pwnedpasswords.com/range/" + password.hexdigest()[:5])
     if req.status_code == 200:
-        if password in req.text:
+        if str(password) in req.text:
             return True
         else:
             return False
@@ -554,25 +603,27 @@ def check_logout():
 
 def check_ban(ip, username):
     cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
-    banlist = cursor.execute("SELECT `username`, `ban_ip`, `ban_admin`, `ban_visible`, `ban_reason`, `ban_start`, "
-                             "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%d "
-                             "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%d AND "
+    banlist = cursor.execute("SELECT `username`, `ban_ip`, `staff`, `ban_visible`, `ban_reason`, `ban_start`, "
+                             "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%s "
+                             "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%s AND "
                              "`username` IS NULL))", (ip, username, username, ip))
 
-    bans = []
-    for ban in banlist:
-        ban = {
-            "username": ban[0],
-            "ip": ban[1],
-            "admin": ban[2],
-            "visible": ban[3],
-            "reason": ban[4],
-            "start": ban[5],
-            "end": ban[6]
-        }
-        bans.append(ban)
-    if bans:
-        return Bans(bans)
+    if banlist is not None:
+        banlist = banlist.fetchall()
+        bans = []
+        for ban in banlist:
+            ban = {
+                "username": ban[0],
+                "ip": ban[1],
+                "admin": ban[2],
+                "visible": ban[3],
+                "reason": ban[4],
+                "start": ban[5],
+                "end": ban[6]
+            }
+            bans.append(ban)
+
+        return bans
     else:
         return False
 
