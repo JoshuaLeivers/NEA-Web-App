@@ -19,6 +19,16 @@
 
     <p>Your password will be checked against a database of breached passwords to ensure that you do not either reuse a password, or use a very basic password.</p>
 
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <ul class="errors">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+            </ul>
+        {% endif %}
+    {% endwith %}
+
     <form action="{{ url_for('register_confirm') }}" method="post">
         {{ form.hidden_tag() }}
 

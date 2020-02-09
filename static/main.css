@@ -3,6 +3,10 @@ body {
     font-family: 'Raleway', sans-serif;
 }
 
+ul.errors li {
+    color: red;
+}
+
 .navbar ul {
     list-style-type: none;
     position: fixed;

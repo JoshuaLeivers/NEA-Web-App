@@ -57,7 +57,9 @@ class ConfigOptionError(Error):
 
     def __init__(self, option, section):
         Error.__init__(self,
-                       option + " missing from " + section + " section. Please configure " + section + " settings. Resetting to default.")
+                       option + " missing from " + section + " section. Please configure " + section + "settings. "
+                                                                                                       "Resetting to "
+                                                                                                       "default.")
         self.option = option
         self.section = section
         self.args = (option, section)
@@ -253,9 +255,11 @@ class RegisterConfirmForm(FlaskForm):
     tfa = BooleanField("Setup Two Factor Authentication?", default=True)
     submit = SubmitField("Confirm")
 
+
 class RegisterConfirmCodeForm(FlaskForm):
-    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)]) # TODO: Add correct length
+    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)])  # TODO: Add correct length
     submit = SubmitField("Confirm")
+
 
 class RegisterTFAForm(FlaskForm):
     token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
@@ -436,7 +440,7 @@ def register():
 def register_confirm():
     logout = check_logout()
     if not logout:
-        return redirect(get_redirect("register/confirm"), 303)
+        return redirect(get_redirect("register_confirm"), 303)
     elif isinstance(logout, Bans):
         return banned(logout)
     else:
@@ -445,12 +449,12 @@ def register_confirm():
             cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
             cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
-            username = cursor.fetchone()
-            if not username:
+            data = cursor.fetchone()
+            if not data:
                 flash("Account creation request expired or invalid.")
                 return redirect("register", 303)
             else:
-                username = username[0]
+                username = data[0]
                 cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
                 if cursor.fetchone():
                     flash("The account '" + username + "' already exists.")
@@ -460,7 +464,9 @@ def register_confirm():
                     invalid = check_password_invalid(password)
                     if invalid:
                         flash(invalid)
-                        return render_template("register_confirm.html"), 422
+                        expires = data[1] + timedelta(minutes=30)
+                        return render_template("register_confirm.html", title="Confirm Registration", username=username,
+                                               expires=expires, form=form), 422
                     else:
                         cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
                                        (username, bcrypt.generate_password_hash(password)))
@@ -492,7 +498,7 @@ def register_confirm():
 def register_confirm_code():
     logout = check_logout()
     if not logout:
-        return redirect(get_redirect("register_confirm_manual"))
+        return redirect(get_redirect("register_confirm_code"))
     elif isinstance(logout, Bans):
         return banned(logout)
     else:
@@ -502,10 +508,12 @@ def register_confirm_code():
 
             cursor.execute("SELECT TRUE FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
             if cursor.fetchone():
-                redirect(url_for("register_confirm") + "?id=" + form.req_id.data)
+                return redirect(url_for("register_confirm") + "?id=" + form.req_id.data)
             else:
-                flash("") # TODO: Finish code form
-
+                flash("Account creation request expired or invalid.")
+                return render_template("register_confirm_code.html", form=form)
+        else:
+            return render_template("register_confirm_code.html", form=form)
 
 
 @app.route("/logout")
@@ -576,14 +584,14 @@ def get_useragent(full=False):
 def get_user_type():
     cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
                    (request.cookies.get("sessionID"),))
-    return cursor.fetchone()
+    return cursor.fetchone()[0]
 
 
 def check_password_pwned(password):
-    password = hashlib.sha1(password.encode("utf-8"))
-    req = requests.get("https://api.pwnedpasswords.com/range/" + password.hexdigest()[:5])
+    password = hashlib.sha1(password.encode("utf-8")).hexdigest().upper()
+    req = requests.get("https://api.pwnedpasswords.com/range/" + password[:5])
     if req.status_code == 200:
-        if str(password) in req.text:
+        if password[5:] in req.text:
             return True
         else:
             return False
@@ -596,9 +604,8 @@ def check_password_invalid(password):
     if not 9 < len(password) < 73:
         return "Passwords must be between 10 and 72 characters in length."
     elif check_password_pwned(password):
-        return "The password you have attempted to use has been breached in the past. If you use this password " \
-               "elsewhere, your accounts may be vulnerable. Please do not reuse passwords, and please change your " \
-               "passwords anywhere you have used this password. "
+        return "Your password has been leaked in the past. If you have used this password elsewhere, change it " \
+               "immediately to avoid your accounts being breached. "
     else:
         return False
 
@@ -607,25 +614,24 @@ def check_logout():
     cursor.execute("CALL BANS_REMOVEOLD(); CALL SESSIONS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
     cookies = request.cookies
     if cookies.get("sessionID") is not None:
-        cursor.execute("SELECT `sess_id`, `username`, `sess_ip`, `sess_useragent`, FROM `sessions` WHERE "
-                       "`sess_id` = %s", cookies.get("sessionID"))
+        cursor.execute("SELECT `username`, `sess_ip`, `sess_useragent` FROM `sessions` WHERE `sess_id` = %s",
+                       (cookies.get("sessionID"),))
         session = cursor.fetchone()
         if session:
-            bans = check_ban(get_ip(), session[1])
+            bans = check_ban(get_ip(), session[0])
             if bans:
-                cursor.execute("DELETE FROM sessions WHERE username=%s", session[1])
+                cursor.execute("DELETE FROM sessions WHERE username=%s", session[0])
                 return bans
             else:
-                if session[2] != get_ip() or session[3] != get_useragent():
-                    cursor.execute("DELETE FROM `sessions` WHERE `sess_id` = %s", session[0])
+                if session[1] != get_ip() or session[2] != get_useragent():
+                    cursor.execute("DELETE FROM `sessions` WHERE `sess_id` = %s", (cookies.get("sessionID"),))
                     return "IP or system changed. Please log in again to confirm your identity."
                 else:
                     return False
         else:
-            return True
+            return "Session timed out."
     else:
         return True
-    # TODO FIX THIS: Attempting a login twice returns an unread result somewhere here
 
 
 def check_ban(ip, username):
@@ -667,12 +673,12 @@ def start_session(username, origin, target=None):
         sess_id = "".join(secrets.choice(chars) for i in range(32))
 
         cursor.execute("INSERT INTO sessions (sess_id, username, sess_start, sess_last, sess_ip, sess_useragent) VALUES"
-                       "(%s, %s, NOW(), NOW(), %d, %s)", (sess_id, username, get_ip(), request.user_agent.string))
+                       "(%s, %s, NOW(), NOW(), %s, %s)", (sess_id, username, get_ip(), request.user_agent.string))
 
         if target is None:
             target = get_redirect(origin)
-        resp = redirect(url_for(target), 303)
-        resp.set_cookie("sessionID", sess_id, max_age=None, samesite=True, secure=True, httponly=True)
+        resp = redirect(target, 303)
+        resp.set_cookie("sessionID", sess_id, max_age=None, httponly=True)
         return resp
 
 
@@ -682,8 +688,7 @@ def get_redirect(this):
         return url_for(origin)
 
     origin = request.referrer
-    print(origin, request.url_root, request.host, request.host_url)
-    if urlparse(origin).hostname == request.url_root and origin != url_for(this):
+    if urlparse(origin).hostname == request.url_root and origin != this:
         return origin
 
     return url_for("dashboard")
