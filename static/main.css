@@ -7,6 +7,93 @@ ul.errors li {
     color: red;
 }
 
+p.error {
+    color: red;
+}
+
+
+form {
+    border: 5px;
+    padding: 5px;
+    margin: 5px;
+    text-align: center;
+}
+
+form input[type=text] {
+    border: none;
+    padding: 5px;
+    font-family: sans-serif;
+    border-bottom: 2px solid #454545;
+    background-color: #303030;
+    color: white;
+}
+
+form input[type=password] {
+    border: none;
+    padding: 5px;
+    font-family: sans-serif;
+    border-bottom: 2px solid #454545;
+    background-color: #303030;
+    color: white;
+}
+
+form input[type=submit] {
+    border: none;
+    padding: 5px;
+    font-family: sans-serif;
+    border-bottom: 2px solid #454545;
+    background-color: #303030;
+    color: white;
+}
+
+
+.tooltip {
+    position: relative;
+    display: inline-block;
+    border-bottom: 1px dotted black;
+}
+
+.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: #404040;
+    color: white;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+
+    position: absolute;
+    z-index: 1;
+}
+
+.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
+i.tooltip {
+    position: relative;
+    display: inline-block;
+}
+
+i.tooltip .tooltiptext {
+    visibility: hidden;
+    width: 120px;
+    background-color: #404040;
+    color: white;
+    text-align: center;
+    padding: 5px 0;
+    border-radius: 6px;
+    font-family: 'Raleway', sans-serif;
+
+    position: absolute;
+    z-index: 1;
+}
+
+i.tooltip:hover .tooltiptext {
+    visibility: visible;
+}
+
+
 .navbar ul {
     list-style-type: none;
     position: fixed;

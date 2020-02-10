@@ -21,9 +21,10 @@
         {{ form.csrf_token }}
 
         <p>
-            {{ form.username.label }}
-            <br>
-            {{ form.username }}
+            {{ form.username(placeholder="4004xxxxYY") }} @ nuast.org
+            <i class="fas fa-question-circle tooltip">
+                <span class="tooltiptext">This is the same username for school computers and email!</span>
+            </i>
         </p>
 
         <p>

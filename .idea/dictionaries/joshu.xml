@@ -11,6 +11,7 @@
       <w>removeold</w>
       <w>signin</w>
       <w>smtp</w>
+      <w>tooltiptext</w>
     </words>
   </dictionary>
 </component>

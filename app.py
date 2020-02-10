@@ -156,8 +156,6 @@ try:
         "senders": {
             "default": config.get("Email", "Default Sender"),
             "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender")
-            # TODO: Convert fully to config instead of args, make sure lists are handled correctly, and add try except
-            #  clauses to make sure values are valid
         }
     }
 except configparser.NoSectionError:
@@ -173,7 +171,6 @@ except configparser.NoOptionError as err:
 
     raise ConfigOptionError(err.option, "Email")
 
-options = []
 if email["domain"] is None or not (validators.domain(email["domain"]) or validators.ipv4(email["domain"])):
     options.append("Domain")
 if email["port"] is None:
@@ -209,7 +206,6 @@ except configparser.NoSectionError:
 
     raise ConfigSectionError("Limits")
 
-options = []
 if limits["requests"]["user"] is None:
     options.append("User Requests")
 if limits["requests"]["ip"] is None:
@@ -257,7 +253,7 @@ class RegisterConfirmForm(FlaskForm):
 
 
 class RegisterConfirmCodeForm(FlaskForm):
-    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)])  # TODO: Add correct length
+    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)])
     submit = SubmitField("Confirm")
 
 
@@ -428,7 +424,7 @@ def register():
                             "%Y-%m-%d %H:%M:%S"), get_useragent(), get_ip()))
 
                         return make_response(render_template("registered.html", title="Registered", username=username,
-                                                             redirect=url_for("login")))
+                                                             redirect=url_for("register_confirm_code")))
             else:
                 flash("A user already exists using the given username.")
                 return render_template("register.html", title="Register", form=form), 403
@@ -695,4 +691,4 @@ def get_redirect(this):
 
 
 if __name__ == '__main__':
-    app.run(ssl_context="adhoc")
+    app.run(ssl_context="adhoc", host="0.0.0.0")
