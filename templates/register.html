@@ -27,11 +27,13 @@
         <p>
             {{ form.submit() }}
         </p>
+
+        <p>Already have an account? <a href="{{ url_for("login") }}">Sign in</a>
     </form>
 
-    <p>Already have an account? <a href="{{ url_for("login") }}">Sign in</a>.</p>
+{% endblock %}
 
-    <hr>
+{% block footer %}
 
     <p>Having issues registering? <a href="mailto:{{ email_accounts }}">Contact us</a>.</p>
 

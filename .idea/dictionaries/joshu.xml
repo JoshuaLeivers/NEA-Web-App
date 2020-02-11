@@ -5,6 +5,7 @@
       <w>banlist</w>
       <w>bcrypt</w>
       <w>configparser</w>
+      <w>darkmode</w>
       <w>navbar</w>
       <w>nuast</w>
       <w>removebanned</w>
@@ -12,6 +13,7 @@
       <w>signin</w>
       <w>smtp</w>
       <w>tooltiptext</w>
+      <w>userdata</w>
     </words>
   </dictionary>
 </component>

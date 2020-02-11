@@ -23,7 +23,7 @@
     {% elif request.cookies.get("colours") == "dark" %}
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='dark.css') }}">
     {% elif request.cookies.get("colours") == "light" %}
-        <link rel="stylesheet"  type="text/css" href="{{ url_for('static', filename='light.css') }}">
+        <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='light.css') }}">
     {% else %}
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='default.css') }}">
     {% endif %}
@@ -35,15 +35,13 @@
 <body>
 <div class="navbar">
     <ul>
-        <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}" class="logo" alt="NUAST"></a></li>
+        <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}"
+                                                 class="logo" alt="NUAST"></a></li>
 
-        <li><a href="{{ url_for('dashboard') }}" class="{{ request.path == '/dashboard' and 'active' }}">Dashboard</a></li>
+        <li><a href="{{ url_for('dashboard') }}" class="{{ request.path == '/dashboard' and 'active' }}">Dashboard</a>
+        </li>
 
         {% block navbar %}{% endblock %}
-
-        <li><a href="{{ url_for('darkmode') }}"><i class="fas fa-moon tooltip">
-            <span class="tooltiptext">Dark Mode</span>
-        </i></a></li>
 
         {% if request.path == "/login" %}
             <li class="login"><a href="{{ url_for('register') }}">Register</a></li>
@@ -52,6 +50,8 @@
         {% else %}
             <li class="login"><a href="{{ url_for('logout') }}">Logout</a></li>
         {% endif %}
+
+        <li style="float: right;"><span title="Light/Dark"><a href="{{ url_for('darkmode') }}?redirect={{ request.endpoint }}"><i class="fas fa-moon"></i></a></span></li>
     </ul>
 </div>
 
@@ -59,8 +59,6 @@
     {% block content %}{% endblock %}
 </div>
 
-<div class="footer">
-    {% block footer %}{% endblock %}
-</div>
+<footer>{% block footer %}{% endblock %}</footer>
 </body>
 </html>

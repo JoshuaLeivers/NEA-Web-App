@@ -22,7 +22,6 @@ import base64
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
 from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
 
-
 config = configparser.ConfigParser()
 config.read("config.ini")
 
@@ -134,6 +133,7 @@ if any(not validators.ipv4(ip) for ip in limits["exemptions"]["ips"]):
 
 if len(options) > 0:
     raise ConfigInvalidValueError(options, "requests")
+
 
 # TODO: Turn exemptions into dictionaries with key IP and value Reason (e.g. NUAST IP, NUAST; UoN IP, UoN)
 
@@ -294,7 +294,7 @@ def register():
                         <p><b>IP</b>: {request.remote_addr} 
                         {(request.remote_addr in limits["exemptions"]["ips"]) and "<b>(NUAST)</b>"}</p> 
                         <p><b>Browser</b>: {request.user_agent.browser} {request.user_agent.version}</p>
-                        <p><b>Operating System</b>: {request.user_agent.platform}""" # TODO: Get test for exemption to work correctly
+                        <p><b>Operating System</b>: {request.user_agent.platform}"""  # TODO: Get test for exemption to work correctly
 
                         mail.send(msg)
 
@@ -324,7 +324,8 @@ def register_confirm():
             if form.validate_on_submit():
                 cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-                cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+                cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
+                               (form.req_id.data,))
                 data = cursor.fetchone()
                 if not data:
                     flash("Account creation request expired or invalid.")
@@ -341,7 +342,8 @@ def register_confirm():
                         if invalid:
                             flash(invalid)
                             expires = data[1] + timedelta(minutes=30)
-                            return render_template("register_confirm.html", title="Confirm Registration", username=username,
+                            return render_template("register_confirm.html", title="Confirm Registration",
+                                                   username=username,
                                                    expires=expires, form=form), 422
                         else:
                             cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
@@ -350,10 +352,12 @@ def register_confirm():
                                                  (form.tfa.data and url_for("settings_tfa") or url_for("dashboard")))
             else:
                 if form.req_id.errors is None:
-                    cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+                    cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
+                                   (form.req_id.data,))
                     data = cursor.fetchone()
                     if data is not None:
-                        return render_template("register_confirm.html", title="Confirm Registration", form=form, username=data[0], expires=data[1]+timedelta(minutes=30))
+                        return render_template("register_confirm.html", title="Confirm Registration", form=form,
+                                               username=data[0], expires=data[1] + timedelta(minutes=30))
         elif request.method == "GET":
             if request.args.get("id") is not None:
                 cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
@@ -398,6 +402,11 @@ def register_confirm_code():
             return render_template("register_confirm_code.html", form=form)
 
 
+@app.route("/profile/<username>")
+def profile(username):
+
+
+
 @app.route("/logout")
 def logout():
     resp = make_response(redirect("login", 303))
@@ -408,7 +417,12 @@ def logout():
 
 @app.route("/darkmode")
 def darkmode():
-    resp = make_response(redirect(get_redirect("darkmode"), 303))
+    target = request.args.get("redirect")
+    if target is None:
+        target = request.referrer
+    else:
+        target = url_for(target)
+    resp = make_response(redirect(target, 303))
     if not request.cookies.get("colours"):
         resp.set_cookie("colours", "dark")
     elif request.cookies.get("colours") == "dark":
@@ -464,6 +478,18 @@ def inject_emails():
     return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"])
 
 
+@app.context_processor
+def inject_userdata():
+    cursor.execute("SELECT u.`username`, u.`forename`, u.`surname`, u.`attendance` FROM `users` `u` INNER JOIN "
+                   "`sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
+    data = cursor.fetchone()
+
+    if data is not None:
+        return dict(username=data[0], forename=data[1], surname=data[2], attendance=data[3])
+    else:
+        return dict(dummy="")
+
+
 # Utility functions
 def get_ip():
     return int.from_bytes(inet_aton(request.remote_addr), "big")
@@ -476,10 +502,22 @@ def get_useragent(full=False):
         return str(request.user_agent)
 
 
-def get_user_type():
-    cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
-                   (request.cookies.get("sessionID"),))
+def get_user_type(username):
+    if username is None:
+        cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
+                       (request.cookies.get("sessionID"),))
+    else:
+        cursor.execute("") # TODO: Add thing to get user type if username is not None using given username
     return cursor.fetchone()[0]
+
+
+def get_username():
+    cursor.execute("SELECT u.`username` FROM `users` `u` INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
+    data = cursor.fetchone()
+    if data is None:
+        return None
+    else:
+        return data[0]
 
 
 def check_password_pwned(password):
