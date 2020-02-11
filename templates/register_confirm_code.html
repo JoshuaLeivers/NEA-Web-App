@@ -2,26 +2,22 @@
 
 {% block content %}
 
-    <h2>Register</h2>
-    <p>Enter the code you received via email below to create your account:</p>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul class=flashes>
-                {% for message in messages %}
-                    <li>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    {% endwith %}
-
     <form action="{{ url_for('register_confirm_code') }}" method="post">
+        <h1>Register</h1>
+        <p>Enter the code you received via email below to create your account:</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="error">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         {{ form.csrf_token }}
 
         <p>
-            {{ form.req_id.label }}
-            <br>
-            {{ form.req_id }}
+            {{ form.req_id(placeholder="Code") }}
         </p>
 
         <p>

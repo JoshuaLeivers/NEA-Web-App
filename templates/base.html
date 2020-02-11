@@ -25,7 +25,6 @@
     {% elif request.cookies.get("colours") == "light" %}
         <link rel="stylesheet"  type="text/css" href="{{ url_for('static', filename='light.css') }}">
     {% else %}
-        {{ request.cookies.delete_cookie("colours") }}
         <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='default.css') }}">
     {% endif %}
 
@@ -36,17 +35,15 @@
 <body>
 <div class="navbar">
     <ul>
-        <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}" class="logo"></a></li>
+        <li><a href="https://nuast.org.uk/"><img src="{{ url_for('static', filename='nuast-molecule-small.png') }}" class="logo" alt="NUAST"></a></li>
 
         <li><a href="{{ url_for('dashboard') }}" class="{{ request.path == '/dashboard' and 'active' }}">Dashboard</a></li>
 
         {% block navbar %}{% endblock %}
 
-        {% if request.cookies.get("colours") %}
-        <li></li>
-        {% else %}
-        <li></li>
-        {% endif %}
+        <li><a href="{{ url_for('darkmode') }}"><i class="fas fa-moon tooltip">
+            <span class="tooltiptext">Dark Mode</span>
+        </i></a></li>
 
         {% if request.path == "/login" %}
             <li class="login"><a href="{{ url_for('register') }}">Register</a></li>

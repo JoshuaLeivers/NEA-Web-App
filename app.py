@@ -15,98 +15,13 @@ from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
 from flask_bcrypt import Bcrypt
 import onetimepass
+from forms import *
+from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError
+from defaults import defaults
 import base64
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
 from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
 
-
-class Error(Exception):
-    """Base class for exceptions in this app."""
-
-    def __init__(self, message):
-        self.message = message
-        Exception.__init__(self, message)
-
-    def __repr__(self):
-        return self.message
-
-    __str__ = __repr__
-
-
-class ConfigSectionError(Error):
-    """Exception raised when configparser cannot find a given section.
-
-    Attributes:
-        section -- section which configparser could not find
-    """
-
-    def __init__(self, section):
-        Error.__init__(self, section + " section in config does not exist. Please configure "
-                       + section + ". Resetting to defaults.")
-        self.section = section
-        self.args = (section,)
-
-
-class ConfigOptionError(Error):
-    """Exception raised when configparser cannot find a given option.
-
-    Attributes:
-        option -- option which configparser cannot find
-        section -- section which the option should be in
-    """
-
-    def __init__(self, option, section):
-        Error.__init__(self,
-                       option + " missing from " + section + " section. Please configure " + section + "settings. "
-                                                                                                       "Resetting to "
-                                                                                                       "default.")
-        self.option = option
-        self.section = section
-        self.args = (option, section)
-
-
-class ConfigInvalidValueError(Error):
-    """Exception raised when a config value is invalid.
-
-    Attributes:
-        key -- the config key whose value is invalid
-    """
-
-    def __init__(self, options, section):
-        Error.__init__(self, ", ".join(
-            options) + " invalid for the " + section + " section of the config.ini. Reconfigure to continue operating the web app.")
-        self.options = options
-        self.section = section
-        self.args = (options, section)
-
-
-defaults = {
-    "Database": {
-        "Domain": "127.0.0.1",
-        "Port": "3306",
-        "Username": "root",
-        "Password": "",
-        "Database": "portal"
-    },
-    "Email": {
-        "Domain": "127.0.0.1",
-        "Port": "587",
-        "Username": "",
-        "Password": "",
-        "TLS": "True",
-        "SSL": "False",
-        "Default Sender": "joshua@leivers.dev",
-        "Accounts Sender": "joshua@leivers.dev"
-    },
-    "Limits": {
-        "User Requests": 5,
-        "IP Requests": 20,
-        "User Sessions": 7,
-        "IP Sessions": 30,
-        "Exempt Users": "",
-        "Exempt IPs": "77.111.227.3 81.97.245.234"
-    }
-}
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -220,46 +135,13 @@ if any(not validators.ipv4(ip) for ip in limits["exemptions"]["ips"]):
 if len(options) > 0:
     raise ConfigInvalidValueError(options, "requests")
 
+# TODO: Turn exemptions into dictionaries with key IP and value Reason (e.g. NUAST IP, NUAST; UoN IP, UoN)
+
 
 # Class used to be able to test if when a user is logged out it is because of a ban, and to store the bans for use
 class Bans:
     def __init__(self, bans):
         self.bans = bans
-
-
-# WTForms Templates
-class LoginForm(FlaskForm):
-    username = StringField("Username", validators=[DataRequired()])
-    password = PasswordField("Password", validators=[DataRequired()])
-    token = StringField("Token")
-    submit = SubmitField("Sign In")
-
-
-class RegisterForm(FlaskForm):
-    username = StringField("Username", validators=[InputRequired(), Length(1, 64, message="Username must be between "
-                                                                                          "1-64 characters in "
-                                                                                          "length.")])
-    submit = SubmitField("Register")
-
-
-class RegisterConfirmForm(FlaskForm):
-    req_id = HiddenField("Request", validators=[DataRequired(), Length(64, 64)])
-    password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
-                                                                                            "between 10 and 72 "
-                                                                                            "characters long.")])
-    password_confirm = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password")])
-    tfa = BooleanField("Setup Two Factor Authentication?", default=True)
-    submit = SubmitField("Confirm")
-
-
-class RegisterConfirmCodeForm(FlaskForm):
-    req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)])
-    submit = SubmitField("Confirm")
-
-
-class RegisterTFAForm(FlaskForm):
-    token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
-    submit = SubmitField("Verify")
 
 
 app = Flask(__name__)
@@ -318,7 +200,6 @@ def dashboard():
             return render_template("dashboard_staff.html")
 
 
-@app.route("/signin", methods=["GET"])
 @app.route("/login", methods=["GET", "POST"])
 def login():
     origin = get_redirect("login")
@@ -397,26 +278,24 @@ def register():
 
                         msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"],
                                       # TODO: Change to nuast.org when complete
-                                      sender=("Student Portal", "joshua@leivers.dev"))
-                        msg.html = "<h2>Confirm your student portal account</h2>" + \
-                                   "<p>Never share this email or the links it contains! Anybody with your " + \
-                                   "confirmation link can create and access an account in your name!</p>" + \
-                                   "<p>You recently requested an account for the NUAST student portal. " + \
-                                   "To confirm your account, click <a href='" + url + "'>here</a>.</p>" + \
-                                   "<p>Can't click the link? Copy and paste the following URL into your browser:</p>" + \
-                                   "<p><a href='" + url + "'>" + url + "</a></p>" + \
-                                   "<p>Didn't request this? Don't worry. You can just ignore this email, or use the " + \
-                                   "link yourself anyway. Nobody will be able to access your account unless they " + \
-                                   "themselves use this link, so make sure to keep it private!</p>" + \
-                                   "<h4>Who requested this?</h4>" + \
-                                   "<p><b>IP</b>: " + request.remote_addr + str((request.remote_addr in
-                                                                                 limits["exemptions"][
-                                                                                     "ips"]) and "NUAST") \
-                                   + "</p>" + \
-                                   "<p><b>Browser</b>: " + request.user_agent.browser + " " + \
-                                   request.user_agent.version + \
-                                   "</p>" + \
-                                   "<p><b>Operating System</b>: " + request.user_agent.platform + "</p>"
+                                      sender=("Student Portal", email["senders"]["accounts"]))
+                        msg.html = f"""<h1>Confirm your student portal account</h1>
+                        <p>Never share or forward this email or the links it contains! 
+                        Anybody with your confirmation link or code can create and access an account in your name!</p>
+                        <p>You recently requested an account for the NUAST student portal. 
+                        To confirm your account, click <a href="{url}">here</a>.</p>
+                        <p>Can't use the link? Copy the following code into the box on 
+                        <a href="{url_for("register_confirm_code")}">{url_for("register_confirm_code")}</a>:</p>
+                        <p>{req_id}</p>
+                        <p>Didn't request this? Don't worry. You can just ignore this email, or use the link yourself 
+                        anyway. Nobody can access your account without the links or code in this email, 
+                        or your password once you have created your account.</p> 
+                        <h3>Who requested this?</h3>
+                        <p><b>IP</b>: {request.remote_addr} 
+                        {(request.remote_addr in limits["exemptions"]["ips"]) and "<b>(NUAST)</b>"}</p> 
+                        <p><b>Browser</b>: {request.user_agent.browser} {request.user_agent.version}</p>
+                        <p><b>Operating System</b>: {request.user_agent.platform}""" # TODO: Get test for exemption to work correctly
+
                         mail.send(msg)
 
                         cursor.execute("INSERT INTO `requests` (`req_id`, `req_username`, `req_time`, `req_useragent`, "
@@ -441,33 +320,40 @@ def register_confirm():
         return banned(logout)
     else:
         form = RegisterConfirmForm()
-        if form.validate_on_submit():
-            cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
+        if request.method == "POST":
+            if form.validate_on_submit():
+                cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-            cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
-            data = cursor.fetchone()
-            if not data:
-                flash("Account creation request expired or invalid.")
-                return redirect("register", 303)
-            else:
-                username = data[0]
-                cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
-                if cursor.fetchone():
-                    flash("The account '" + username + "' already exists.")
-                    return redirect(url_for("login") + "?username=" + username, 303)
+                cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+                data = cursor.fetchone()
+                if not data:
+                    flash("Account creation request expired or invalid.")
+                    return redirect("register", 303)
                 else:
-                    password = form.password.data
-                    invalid = check_password_invalid(password)
-                    if invalid:
-                        flash(invalid)
-                        expires = data[1] + timedelta(minutes=30)
-                        return render_template("register_confirm.html", title="Confirm Registration", username=username,
-                                               expires=expires, form=form), 422
+                    username = data[0]
+                    cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
+                    if cursor.fetchone():
+                        flash("The account '" + username + "' already exists.")
+                        return redirect(url_for("login") + "?username=" + username, 303)
                     else:
-                        cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
-                                       (username, bcrypt.generate_password_hash(password)))
-                        return start_session(username, "register_confirm",
-                                             (form.tfa.data and url_for("settings_tfa") or url_for("dashboard")))
+                        password = form.password.data
+                        invalid = check_password_invalid(password)
+                        if invalid:
+                            flash(invalid)
+                            expires = data[1] + timedelta(minutes=30)
+                            return render_template("register_confirm.html", title="Confirm Registration", username=username,
+                                                   expires=expires, form=form), 422
+                        else:
+                            cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
+                                           (username, bcrypt.generate_password_hash(password)))
+                            return start_session(username, "register_confirm",
+                                                 (form.tfa.data and url_for("settings_tfa") or url_for("dashboard")))
+            else:
+                if form.req_id.errors is None:
+                    cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s", (form.req_id.data,))
+                    data = cursor.fetchone()
+                    if data is not None:
+                        return render_template("register_confirm.html", title="Confirm Registration", form=form, username=data[0], expires=data[1]+timedelta(minutes=30))
         elif request.method == "GET":
             if request.args.get("id") is not None:
                 cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
@@ -517,6 +403,19 @@ def logout():
     resp = make_response(redirect("login", 303))
     resp.delete_cookie("sessionID")
     resp.headers.set("Referer", request.referrer)
+    return resp
+
+
+@app.route("/darkmode")
+def darkmode():
+    resp = make_response(redirect(get_redirect("darkmode"), 303))
+    if not request.cookies.get("colours"):
+        resp.set_cookie("colours", "dark")
+    elif request.cookies.get("colours") == "dark":
+        resp.set_cookie("colours", "light")
+    else:
+        resp.set_cookie("colours", "dark")
+
     return resp
 
 

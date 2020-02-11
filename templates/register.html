@@ -2,28 +2,25 @@
 
 {% block content %}
 
-    <h2>Register</h2>
-
-    <p>Register here for an account on the student portal. Once you submit your school username below, you will receive
-        an email with a link to confirm your account.</p>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul class=flashes>
-            {% for message in messages %}
-                <li>{{ message }}</li>
-            {% endfor %}
-            </ul>
-        {% endif %}
-    {% endwith %}
-
     <form action="{{ url_for('register') }}" method="post">
+        <h1>Register</h1>
+        <p>Request an account on the student portal.</p>
+        <p>Once you request an account, you will receive an email with a link to confirm your account.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="error">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         {{ form.csrf_token }}
 
         <p>
             {{ form.username(placeholder="4004xxxxYY") }} @ nuast.org
             <i class="fas fa-question-circle tooltip">
-                <span class="tooltiptext">This is the same username for school computers and email!</span>
+                <span class="tooltiptext">This is the same username you use for your school email.</span>
             </i>
         </p>
 

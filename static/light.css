@@ -10,6 +10,41 @@
     background-color: #f2f2f2;
 }
 
+
 body {
-    background-color: snow;
+    background-color: #f9f9f9;
+}
+
+
+.tooltip .tooltiptext {
+    background-color: white;
+    color: #303030;
+}
+
+.tooltip .tooltiptext::after {
+    border-color: white transparent transparent transparent;
+}
+
+i.tooltip .tooltiptext {
+    background-color: white;
+    color: #303030;
+}
+
+
+form input[type=text] {
+    border-bottom: 2px solid darkgray;
+    background-color: white;
+    color: #303030;
+}
+
+form input[type=password] {
+    border-bottom: 2px solid darkgray;
+    background-color: white;
+    color: #303030;
+}
+
+form input[type=submit] {
+    border-bottom: 2px solid darkgray;
+    background-color: white;
+    color: #303030;
 }

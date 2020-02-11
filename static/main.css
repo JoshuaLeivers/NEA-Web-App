@@ -21,29 +21,20 @@ form {
 
 form input[type=text] {
     border: none;
-    padding: 5px;
+    padding: 10px;
     font-family: sans-serif;
-    border-bottom: 2px solid #454545;
-    background-color: #303030;
-    color: white;
 }
 
 form input[type=password] {
     border: none;
-    padding: 5px;
+    padding: 10px;
     font-family: sans-serif;
-    border-bottom: 2px solid #454545;
-    background-color: #303030;
-    color: white;
 }
 
 form input[type=submit] {
     border: none;
-    padding: 5px;
+    padding: 10px;
     font-family: sans-serif;
-    border-bottom: 2px solid #454545;
-    background-color: #303030;
-    color: white;
 }
 
 
@@ -56,14 +47,25 @@ form input[type=submit] {
 .tooltip .tooltiptext {
     visibility: hidden;
     width: 120px;
-    background-color: #404040;
-    color: white;
+    bottom: 100%;
+    left: 50%;
+    margin-left: -60px; /* Half of width left */
     text-align: center;
     padding: 5px 0;
     border-radius: 6px;
 
     position: absolute;
     z-index: 1;
+} /* Add tooltip for below item */
+
+.tooltip .tooltiptext::after {
+    content: " ";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
 }
 
 .tooltip:hover .tooltiptext {
@@ -78,8 +80,6 @@ i.tooltip {
 i.tooltip .tooltiptext {
     visibility: hidden;
     width: 120px;
-    background-color: #404040;
-    color: white;
     text-align: center;
     padding: 5px 0;
     border-radius: 6px;
@@ -113,6 +113,7 @@ i.tooltip:hover .tooltiptext {
     padding: 14px 16px;
     text-align: center;
     text-decoration: none;
+    font-family: 'Raleway', sans-serif;
 }
 
 .navbar li.login {
