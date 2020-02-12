@@ -412,7 +412,9 @@ def profile(username):
             flash("Session timed out or does not exist.")
             return redirect(url_for("login"), 303)
     else:
-        if get_username() == username or (get_user_type() == 1 )
+        if get_username() == username or get_user_type(get_username()) == 1:
+            if get_user_type(username) == 0:
+                return render_template("profile_student.html", data=get_userdata(username))
 
 
 @app.route("/logout")
