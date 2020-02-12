@@ -404,7 +404,15 @@ def register_confirm_code():
 
 @app.route("/profile/<username>")
 def profile(username):
-
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash("Session timed out or does not exist.")
+            return redirect(url_for("login"), 303)
+    else:
+        if get_username() == username or (get_user_type() == 1 )
 
 
 @app.route("/logout")
@@ -507,8 +515,13 @@ def get_user_type(username):
         cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
                        (request.cookies.get("sessionID"),))
     else:
-        cursor.execute("") # TODO: Add thing to get user type if username is not None using given username
-    return cursor.fetchone()[0]
+        cursor.execute("SELECT `type` FROM `users` WHERE `username` = %s", (username,))
+
+    data = cursor.fetchone()
+    if data is not None:
+        return data[0]
+    else:
+        return None
 
 
 def get_username():
