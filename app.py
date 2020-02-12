@@ -4,6 +4,7 @@ import os
 import secrets
 import time
 from datetime import timedelta
+from operator import itemgetter
 from urllib.parse import urlparse
 import requests
 import validators
@@ -15,6 +16,8 @@ from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
 from flask_bcrypt import Bcrypt
 import onetimepass
+from werkzeug.exceptions import HTTPException
+
 from forms import *
 from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError
 from defaults import defaults
@@ -69,7 +72,8 @@ try:
         "ssl": config.getboolean("Email", "SSL"),
         "senders": {
             "default": config.get("Email", "Default Sender"),
-            "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender")
+            "accounts": config.get("Email", "Accounts Sender") or config.get("Email", "Default Sender"),
+            "webmaster": config.get("Email", "Webmaster Sender") or config.get("Email", "Default Sender")
         }
     }
 except configparser.NoSectionError:
@@ -187,6 +191,7 @@ def favicon():
 @app.route("/")
 @app.route("/dashboard")
 def dashboard():
+    abort(451)
     logout = check_logout()
     if logout:
         if isinstance(logout, Bans):
@@ -411,10 +416,31 @@ def profile(username):
         else:
             flash("Session timed out or does not exist.")
             return redirect(url_for("login"), 303)
-    else:
+    elif is_user(username):
         if get_username() == username or get_user_type(get_username()) == 1:
             if get_user_type(username) == 0:
                 return render_template("profile_student.html", data=get_userdata(username))
+            else:
+                return render_template("profile_staff.html")
+    else:
+        return error_handler(None, 404, "The user whose profile you attempted to access does not exist.")
+
+
+@app.route("/timetable/<username>")
+def timetable(username):
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash("Session timed out or does not exist.")
+            return redirect(url_for("login"), 303)
+    elif is_user(username):
+        if get_username() == username or get_user_type(get_username()) == 1:
+            if get_user_type(username) == 0:
+                return render_template("timetable.html", timetable=get_timetable())
+    else:
+        return error_handler(None, 404, "The user whose profile you attempted to access does not exist.")
 
 
 @app.route("/logout")
@@ -447,60 +473,66 @@ def banned(bans):
     bans = bans.bans
     if any(ban["visible"] == 0 for ban in bans.bans):
         abort(500)
+    elif any(ban["visible"] == 51 for ban in bans.bans):
+        return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
     else:
-        baninfo = ""
-        for ban in bans.bans:
-            if ban["visible"] < 5:
-                if ban["visible"] < 4:
-                    ban["admin"] = None
-                    if ban["visible"] < 3:
-                        ban["reason"] = None
-                        if ban["visible"] < 2:
-                            ban["start"] = None
+        ban = sorted(bans, key=itemgetter("visible"))[0]
+        if ban["visible"] < 5:
+            if ban["visible"] < 4:
+                ban["admin"] = None
+                if ban["visible"] < 3:
+                    ban["reason"] = None
+                    if ban["visible"] < 2:
+                        ban["start"] = None
 
-            baninfo = ban
-            if not any(ban["visible"] == 51 for ban in bans.bans):
-                if baninfo["username"] is None:
-                    break
-                elif baninfo["ip"] is None and not any(banned["username"] is None for banned in bans.bans):
-                    break
-                elif not any(banned["ip"] is None or banned["username"] is None for banned in bans.bans):
-                    break
-            else:
-                if baninfo["visible"] == 51:
-                    break
-
-        if baninfo["visible"] == 51:
-            return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
-        else:
-            return make_response(render_template("err_banned.html", ban=baninfo), 403)
+        return render_template("err_banned.html", ban=ban), 403
 
 
 # Error Handling
-@app.errorhandler(451)
-def err_legal():
-    return render_template("err_451.html"), 451
+@app.errorhandler(HTTPException)
+def error_handler(error, code=None, description=None):
+    return render_template("error.html", code=(code or error.code), description=(description or error.description))
 
 
 # Value Injection
 @app.context_processor
 def inject_emails():
-    return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"])
+    return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"], email_webmaster=email["senders"]["webmaster"])
 
 
 @app.context_processor
 def inject_userdata():
-    cursor.execute("SELECT u.`username`, u.`forename`, u.`surname`, u.`attendance` FROM `users` `u` INNER JOIN "
-                   "`sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
-    data = cursor.fetchone()
-
+    data = get_userdata()
     if data is not None:
-        return dict(username=data[0], forename=data[1], surname=data[2], attendance=data[3])
+        return dict(username=data[0], forename=data[1], surname=data[2], attendance=data[3], year=data[4])
     else:
         return dict(dummy="")
 
 
 # Utility functions
+def is_user(username):
+    cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
+    if cursor.fetchone() is None:
+        return False
+    else:
+        return True
+
+
+def get_timetable(username=None):
+    if get_user_type(username) == 1:
+        return None
+    elif username is None:
+        cursor.execute("SELECT `username` FROM `sessions` WHERE `sess_id` = %s", (request.cookies.get("sessionID"),))
+        username = cursor.fetchone()
+        if username is None:
+            return None
+        else:
+            return get_timetable(username[0])
+    else:
+        pass
+        # TODO: Add Flask-Excel and figure out a way to extract and display data from an exported timetable
+
+
 def get_ip():
     return int.from_bytes(inet_aton(request.remote_addr), "big")
 
@@ -512,7 +544,7 @@ def get_useragent(full=False):
         return str(request.user_agent)
 
 
-def get_user_type(username):
+def get_user_type(username=None):
     if username is None:
         cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
                        (request.cookies.get("sessionID"),))
@@ -524,6 +556,17 @@ def get_user_type(username):
         return data[0]
     else:
         return None
+
+
+def get_userdata(username=None):
+    if username is None:
+        cursor.execute("SELECT u.`username`, u.`forename`, u.`surname`, u.`attendance`, u.`year` FROM `users` `u` "
+                       "INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
+    else:
+        cursor.execute("SELECT `username`, `forename`, `surname`, `attendance`, `year` FROM `users` WHERE `username` "
+                       "= %s", (username,))
+
+    return cursor.fetchone()
 
 
 def get_username():
