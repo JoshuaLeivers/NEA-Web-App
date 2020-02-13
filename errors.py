@@ -1,3 +1,7 @@
+from werkzeug.exceptions import HTTPException
+
+
+# Python Errors
 class Error(Exception):
     """Base class for exceptions in this app."""
 
@@ -52,7 +56,13 @@ class ConfigInvalidValueError(Error):
 
     def __init__(self, options, section):
         Error.__init__(self, ", ".join(
-            options) + " invalid for the " + section + " section of the config.ini. Reconfigure to continue operating the web app.")
+            options) + " given in " + section + " section of config.ini is invalid")
         self.options = options
         self.section = section
         self.args = (options, section)
+
+
+# HTTP Errors
+class InvalidUser(HTTPException):
+    code = 404
+    description = "This user does not exist."

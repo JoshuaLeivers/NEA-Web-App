@@ -3,9 +3,12 @@ import hashlib
 import os
 import secrets
 import time
+import traceback
 from datetime import timedelta
 from operator import itemgetter
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
+from urllib.request import urlretrieve
+
 import requests
 import validators
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
@@ -16,10 +19,10 @@ from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
 from flask_bcrypt import Bcrypt
 import onetimepass
-from werkzeug.exceptions import HTTPException
+from werkzeug.exceptions import HTTPException, NotFound
 
 from forms import *
-from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError
+from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError, InvalidUser
 from defaults import defaults
 import base64
 from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
@@ -112,9 +115,10 @@ try:
             "ip": config.getint("Limits", "IP Sessions")
         },
         "exemptions": {
-            "users": config.get("Limits", "Exempt Users").split(),
-            # By default, split() separates a string by whitespace
-            "ips": config.get("Limits", "Exempt IPs").split()
+            "users": config.get("Limits", "Exempt Users"),
+            "ips": config.get("Limits", "Exempt IPs")
+            # Exemptions are stored in the format '<Exemption (IP/Username)>:<Name>,<Exemption (IP/Username)>:<Name>',
+            # where for IPs, 'Name' is the place that uses the IP (e.g. NUAST itself, or the University of Nottingham)
         }
     }
 except configparser.NoSectionError:
@@ -123,6 +127,27 @@ except configparser.NoSectionError:
         config.write(configfile)
 
     raise ConfigSectionError("Limits")
+except configparser.NoOptionError as err:
+    config["Limits"][err.option] = defaults["Limits"][err.option]
+    with open("config.ini", "w") as configfile:
+        config.write(configfile)
+
+        raise ConfigOptionError(err.option, "Limits")
+
+try:
+    limits["exemptions"]["users"] = dict((k.strip(), v.strip()) for k, v in
+                                         (pair.split(":") for pair in limits["exemptions"]["users"].split(",")))
+    limits["exemptions"]["ips"] = dict((k.strip(), v.strip()) for k, v in
+                                       (pair.split(":") for pair in limits["exemptions"]["ips"].split(",")))
+except ValueError as err:
+    # This is raised if one of the exemptions strings does not fit the format required. If it is raised due to anything
+    # else, the original error will be returned.
+    if "users" in traceback.format_exc(2):
+        raise ConfigInvalidValueError(["Exempt Users"], "Limits")
+    elif "ips" in traceback.format_exc(2):
+        raise ConfigInvalidValueError(["Exempt IPs"], "Limits")
+    else:
+        raise err
 
 if limits["requests"]["user"] is None:
     options.append("User Requests")
@@ -137,9 +162,6 @@ if any(not validators.ipv4(ip) for ip in limits["exemptions"]["ips"]):
 
 if len(options) > 0:
     raise ConfigInvalidValueError(options, "requests")
-
-
-# TODO: Turn exemptions into dictionaries with key IP and value Reason (e.g. NUAST IP, NUAST; UoN IP, UoN)
 
 
 # Class used to be able to test if when a user is logged out it is because of a ban, and to store the bans for use
@@ -188,15 +210,43 @@ def favicon():
                                mimetype="image/vnd.microsoft.icon")
 
 
-@app.route("/")
-@app.route("/dashboard")
-def dashboard():
-    abort(451)
+@app.route("/avatar/<username>")
+def avatar(username):
     logout = check_logout()
     if logout:
         if isinstance(logout, Bans):
             return banned(logout)
         else:
+            return redirect(url_for("logout"), 303)
+    else:
+        if is_user(username):
+            if get_username() == username or get_user_type() == 1:
+                try:
+                    avatar = send_from_directory(os.path.join(app.root_path, "static/avatars"), username + ".png",
+                                                 mimetype="image/png")
+                except NotFound:
+                    avatar = urlretrieve("https://gravatar.com/avatar/" + hashlib.md5((username + "@nuast.org").lower()
+                                                                                      .encode("utf-8")).hexdigest() +
+                                         "?" + urlencode({'d':"https://moodle.nuast.org.uk/pluginfile.php/1/core_admin/"
+                                                              "logo/0x200/1564691057/New%20NUAST%20Logo.png",
+                                                          's':"40"}))
+
+                return avatar
+            else:
+                return error_handler(None, 403, "You cannot access other users' avatars.")
+        else:
+            abort(InvalidUser)
+
+
+@app.route("/")
+@app.route("/dashboard")
+def dashboard():
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
             return redirect("logout", 303)
     else:
         if get_user_type() == 0:
@@ -210,6 +260,7 @@ def login():
     origin = get_redirect("login")
     logout = check_logout()
     if not logout:
+        flash("You are already signed in.")
         return redirect(origin, 303)
     elif isinstance(logout, Bans):
         return banned(logout)
@@ -251,6 +302,7 @@ def login():
 def register():
     logout = check_logout()
     if not logout:
+        flash("You are already signed in.")
         return redirect(get_redirect("register"), 303)
     elif isinstance(logout, Bans):
         return banned(logout)
@@ -320,6 +372,7 @@ def register():
 def register_confirm():
     logout = check_logout()
     if not logout:
+        flash("You are already signed in.")
         return redirect(get_redirect("register_confirm"), 303)
     elif isinstance(logout, Bans):
         return banned(logout)
@@ -389,6 +442,7 @@ def register_confirm():
 def register_confirm_code():
     logout = check_logout()
     if not logout:
+        flash("You are already signed out.")
         return redirect(get_redirect("register_confirm_code"))
     elif isinstance(logout, Bans):
         return banned(logout)
@@ -414,7 +468,7 @@ def profile(username):
         if isinstance(logout, Bans):
             return banned(logout)
         else:
-            flash("Session timed out or does not exist.")
+            flash(logout)
             return redirect(url_for("login"), 303)
     elif is_user(username):
         if get_username() == username or get_user_type(get_username()) == 1:
@@ -422,8 +476,10 @@ def profile(username):
                 return render_template("profile_student.html", data=get_userdata(username))
             else:
                 return render_template("profile_staff.html")
+        else:
+            return error_handler(None, 403, "You cannot access other users' profiles.")
     else:
-        return error_handler(None, 404, "The user whose profile you attempted to access does not exist.")
+        abort(InvalidUser)
 
 
 @app.route("/timetable/<username>")
@@ -433,14 +489,14 @@ def timetable(username):
         if isinstance(logout, Bans):
             return banned(logout)
         else:
-            flash("Session timed out or does not exist.")
+            flash(logout)
             return redirect(url_for("login"), 303)
     elif is_user(username):
         if get_username() == username or get_user_type(get_username()) == 1:
             if get_user_type(username) == 0:
                 return render_template("timetable.html", timetable=get_timetable())
     else:
-        return error_handler(None, 404, "The user whose profile you attempted to access does not exist.")
+        abort(InvalidUser)
 
 
 @app.route("/logout")
@@ -474,7 +530,9 @@ def banned(bans):
     if any(ban["visible"] == 0 for ban in bans.bans):
         abort(500)
     elif any(ban["visible"] == 51 for ban in bans.bans):
-        return make_response(render_template("err_banned_legal.html", ban=baninfo), 451)
+        bans = sorted(bans, key=itemgetter("username"))
+        return make_response(render_template("banned_legal.html",
+                                             ban=next(ban for ban in bans if ban["visible"] == 51)), 451)
     else:
         ban = sorted(bans, key=itemgetter("visible"))[0]
         if ban["visible"] < 5:
@@ -494,10 +552,15 @@ def error_handler(error, code=None, description=None):
     return render_template("error.html", code=(code or error.code), description=(description or error.description))
 
 
+# Registering Custom HTTP Exceptions
+app.register_error_handler(InvalidUser, error_handler)
+
+
 # Value Injection
 @app.context_processor
 def inject_emails():
-    return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"], email_webmaster=email["senders"]["webmaster"])
+    return dict(email_accounts=email["senders"]["accounts"], email_default=email["senders"]["default"],
+                email_webmaster=email["senders"]["webmaster"])
 
 
 @app.context_processor
@@ -570,7 +633,8 @@ def get_userdata(username=None):
 
 
 def get_username():
-    cursor.execute("SELECT u.`username` FROM `users` `u` INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
+    cursor.execute("SELECT u.`username` FROM `users` `u` INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s",
+                   (request.cookies.get("sessionID"),))
     data = cursor.fetchone()
     if data is None:
         return None

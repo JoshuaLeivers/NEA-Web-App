@@ -4,7 +4,8 @@
 
     <h2>Confirm Registration</h2>
 
-    <p>To finish creating your account <code>{{ username }}</code>, set a strong password using the following criteria:</p>
+    <p>To finish creating your account <code>{{ username }}</code>, set a strong password using the following criteria:
+    </p>
     <ul>
         <li>Between 10 and 72 characters</li>
         <li>At least one of each of:
@@ -17,19 +18,21 @@
         </li>
     </ul>
 
-    <p>Your password will be checked against a database of breached passwords to ensure that you do not either reuse a password, or use a very basic password.</p>
-
-    {% with messages = get_flashed_messages() %}
-        {% if messages %}
-            <ul class="errors">
-                {% for message in messages %}
-                    <li>{{ message }}</li>
-                {% endfor %}
-            </ul>
-        {% endif %}
-    {% endwith %}
+    <p>Your password will be checked against a database of breached passwords to ensure that you do not either reuse a
+        password, or use a very basic password.</p>
 
     <form action="{{ url_for('register_confirm') }}" method="post">
+        <h1>Confirm Registration</h1>
+        <p>Set a password to create your new account.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="error">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
         {{ form.hidden_tag() }}
 
         <p>

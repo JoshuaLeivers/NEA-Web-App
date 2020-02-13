@@ -45,7 +45,7 @@
 
         {% if request.path == "/login" %}
             <li class="login"><a href="{{ url_for('register') }}">Register</a></li>
-        {% elif request.path == "/register" %}
+        {% elif request.path[:9] == "/register" %}
             <li class="login"><a href="{{ url_for('login') }}">Sign In</a></li>
         {% else %}
             <li class="login"><a href="{{ url_for('logout') }}">Logout</a></li>
