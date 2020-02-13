@@ -8,13 +8,14 @@ from datetime import timedelta
 from operator import itemgetter
 from urllib.parse import urlparse, urlencode
 from urllib.request import urlretrieve
-
+import xlrd
 import requests
 import validators
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
 import mysql.connector
 from flask_mail import Mail, Message
 from flask_wtf import FlaskForm, CSRFProtect
+from libgravatar import Gravatar
 from mysql.connector import errorcode
 from socket import inet_aton, inet_ntoa
 from flask_bcrypt import Bcrypt
@@ -222,16 +223,12 @@ def avatar(username):
         if is_user(username):
             if get_username() == username or get_user_type() == 1:
                 try:
-                    avatar = send_from_directory(os.path.join(app.root_path, "static/avatars"), username + ".png",
+                    resp = send_from_directory(os.path.join(app.root_path, "static/avatars"), username + ".png",
                                                  mimetype="image/png")
                 except NotFound:
-                    avatar = urlretrieve("https://gravatar.com/avatar/" + hashlib.md5((username + "@nuast.org").lower()
-                                                                                      .encode("utf-8")).hexdigest() +
-                                         "?" + urlencode({'d':"https://moodle.nuast.org.uk/pluginfile.php/1/core_admin/"
-                                                              "logo/0x200/1564691057/New%20NUAST%20Logo.png",
-                                                          's':"40"}))
+                    resp = redirect(Gravatar(username + "@gmail.com").get_image(size=200, use_ssl=True), 302)
 
-                return avatar
+                return resp
             else:
                 return error_handler(None, 403, "You cannot access other users' avatars.")
         else:
@@ -250,9 +247,9 @@ def dashboard():
             return redirect("logout", 303)
     else:
         if get_user_type() == 0:
-            return render_template("dashboard_student.html")
+            return render_template("dashboard_student.html", title="Dashboard")
         elif get_user_type() == 1:
-            return render_template("dashboard_staff.html")
+            return render_template("dashboard_staff.html", title="Dashboard")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -276,7 +273,7 @@ def login():
                     return redirect(url_for("reset") + "?user=" + form.username.data, code=303)
                 elif not bcrypt.check_password_hash(hashed, form.password.data):  # If the password is not correct
                     flash("Username or password is incorrect.")
-                    resp = make_response(render_template("login.html", form=form))
+                    resp = make_response(render_template("login.html", title="Sign In", form=form))
                     resp.delete_cookie("sessionID")
                     return resp, 403
                 else:
@@ -285,9 +282,12 @@ def login():
                     else:
                         if onetimepass.valid_totp(form.token.data, secret):
                             return start_session(form.username.data, origin)
+                        else:
+                            flash("Invalid 2FA Token.")
+                            return render_template("login.html", title="Sign In", form=form)
             else:
                 flash("Username or password is incorrect.")
-                resp = make_response(render_template("login.html", form=form))
+                resp = make_response(render_template("login.html", form=form, title="Sign In"))
                 resp.delete_cookie("sessionID")
                 return resp, 403
         else:
@@ -387,7 +387,7 @@ def register_confirm():
                 data = cursor.fetchone()
                 if not data:
                     flash("Account creation request expired or invalid.")
-                    return redirect("register", 303)
+                    return redirect(url_for("register"), 303)
                 else:
                     username = data[0]
                     cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
@@ -461,6 +461,11 @@ def register_confirm_code():
             return render_template("register_confirm_code.html", form=form)
 
 
+@app.route("/profile/")
+def profile_own():
+    return profile(get_username())
+
+
 @app.route("/profile/<username>")
 def profile(username):
     logout = check_logout()
@@ -472,14 +477,38 @@ def profile(username):
             return redirect(url_for("login"), 303)
     elif is_user(username):
         if get_username() == username or get_user_type(get_username()) == 1:
+            data = get_userdata(username)
+            name = get_name(username)
+
             if get_user_type(username) == 0:
-                return render_template("profile_student.html", data=get_userdata(username))
+                if data[1] is not None:
+                    attendance = f"<b>Attendance</b>: {data[1]}"
+                else:
+                    attendance = ""
+
+                if data[2] is not None:
+                    year = f" - Year {data[2]}"
+                else:
+                    year = ""
+
+                tutor = get_tutor(username)
+                if tutor is not None:
+                    tutor = f"<b>Tutor</b>: {tutor}"
+                else:
+                    tutor = ""
+
+                return render_template("profile_student.html", profile_username=data[0], name=name, profile_attendance=attendance, profile_year=year, tutor=tutor)
             else:
-                return render_template("profile_staff.html")
+                return render_template("profile_staff.html", profile_username=username, name=name)
         else:
             return error_handler(None, 403, "You cannot access other users' profiles.")
     else:
         abort(InvalidUser)
+
+
+@app.route("/timetable/")
+def timetable_own():
+    return timetable(get_username())
 
 
 @app.route("/timetable/<username>")
@@ -494,7 +523,23 @@ def timetable(username):
     elif is_user(username):
         if get_username() == username or get_user_type(get_username()) == 1:
             if get_user_type(username) == 0:
-                return render_template("timetable.html", timetable=get_timetable())
+                path = os.path.join(app.root_path, "static/timetables", username + ".xls")
+                if os.path.isfile(path):
+                    sheet = xlrd.open_workbook(path).sheet_by_index(0)
+
+                    timetable = f"""<table>
+                    {"".join(("<tr>" + "".join(("<th>" + str(sheet.cell_value(y, x)) + "</th>") for x in range(sheet.ncols)) + "</tr>") for y in range(sheet.nrows))}
+                    </table>"""
+
+                    return render_template("timetable.html", timetable=timetable, profile_username=username,
+                                           name=get_name(username))
+                else:
+                    return error_handler(None, 503, "The timetable you are looking for has not been uploaded yet. "
+                                                    "Please try again later.")
+            else:
+                return error_handler(None, 422, "Staff members do not have timetables available for viewing.")
+        else:
+            return error_handler(None, 403, "Students cannot view other users' timetables.")
     else:
         abort(InvalidUser)
 
@@ -549,7 +594,9 @@ def banned(bans):
 # Error Handling
 @app.errorhandler(HTTPException)
 def error_handler(error, code=None, description=None):
-    return render_template("error.html", code=(code or error.code), description=(description or error.description))
+    code = code or error.code
+    description = description or error.description
+    return render_template("error.html", code=code, description=description), code
 
 
 # Registering Custom HTTP Exceptions
@@ -581,19 +628,34 @@ def is_user(username):
         return True
 
 
-def get_timetable(username=None):
-    if get_user_type(username) == 1:
+def get_tutor(username=None):
+    if username is None:
+        username = get_username()
+
+    cursor.execute("SELECT c.`class_id` FROM `userclasses` `c` INNER JOIN `users` `u` WHERE c.`username` = %s AND "
+                   "c.`class_id` REGEXP CONCAT(u.`year`, '\\.\\d')", (username,))
+    data = cursor.fetchone()
+    if data is None:
+        print("No tutor")
         return None
-    elif username is None:
-        cursor.execute("SELECT `username` FROM `sessions` WHERE `sess_id` = %s", (request.cookies.get("sessionID"),))
-        username = cursor.fetchone()
-        if username is None:
-            return None
-        else:
-            return get_timetable(username[0])
     else:
-        pass
-        # TODO: Add Flask-Excel and figure out a way to extract and display data from an exported timetable
+        print(data[0])
+        return data[0]
+
+
+def get_name(username=None):
+    if username is None:
+        username = get_username()
+
+    cursor.execute("SELECT `forename`, `surname` FROM `users` WHERE `username` = %s", (username,))
+    data = cursor.fetchone()
+    if data is not None:
+        if (data[0] or data[1]) is None:
+            return ""
+        else:
+            return data[0] + " " + data[1]
+    else:
+        return ""
 
 
 def get_ip():
@@ -750,4 +812,5 @@ def get_redirect(this):
 
 
 if __name__ == '__main__':
+    excel.init_excel(app)
     app.run(ssl_context="adhoc", host="0.0.0.0")
