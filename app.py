@@ -224,7 +224,7 @@ def avatar(username):
             if get_username() == username or get_user_type() == 1:
                 try:
                     resp = send_from_directory(os.path.join(app.root_path, "static/avatars"), username + ".png",
-                                                 mimetype="image/png")
+                                               mimetype="image/png")
                 except NotFound:
                     resp = redirect(Gravatar(username + "@gmail.com").get_image(size=200, use_ssl=True), 302)
 
@@ -497,7 +497,8 @@ def profile(username):
                 else:
                     tutor = ""
 
-                return render_template("profile_student.html", profile_username=data[0], name=name, profile_attendance=attendance, profile_year=year, tutor=tutor)
+                return render_template("profile_student.html", profile_username=data[0], name=name,
+                                       profile_attendance=attendance, profile_year=year, tutor=tutor)
             else:
                 return render_template("profile_staff.html", profile_username=username, name=name)
         else:
@@ -508,7 +509,17 @@ def profile(username):
 
 @app.route("/timetable/")
 def timetable_own():
-    return timetable(get_username())
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    elif get_user_type() == 1:
+        return redirect(url_for("search_timetables"), 303)
+    else:
+        return timetable(get_username())
 
 
 @app.route("/timetable/<username>")
@@ -542,6 +553,42 @@ def timetable(username):
             return error_handler(None, 403, "Students cannot view other users' timetables.")
     else:
         abort(InvalidUser)
+
+
+@app.route("/timetables")
+def search_timetables():
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"))
+    elif get_user_type() == 0:
+        return redirect(url_for("timetable_own"))
+    else:
+        form = SearchForm()
+        cursor.execute("SELECT `class_id` FROM `classes`")
+        form.classes.choices = [(c[0], c[0]) for c in cursor.fetchall()]
+        if form.validate_on_submit():
+            if (form.surname.data or form.forename.data or form.username.data or form.classes.data) is None:
+                cursor.execute("SELECT `username` FROM `users` WHERE `type` = %s", (0,))
+            else:
+                statement = "SELECT `u`.`username` FROM `users` `u`"
+                where = "WHERE"
+                data = []
+                if form.classes.data is not None:
+                    statement += " INNER JOIN `userclasses` `c`"
+                    where += " `c`.`class_id` LIKE '%%s%'"
+                    data.append(form.classes.data)
+                    for i in range(1, len(form.classes.data)):
+                        where += " OR `c`.`class_id` LIKE '%%s%'"
+                if form.forename.data is not None and form.surname.data is not None:
+                    # TODO Finish this section
+                    where += f" `u`.`username` LIKE '4004{form.forename.data[:2]}{form.surname.data[:2]}__'"
+                if form.forename.data is not None:
+                    where +=
+                cursor.execute(statement, )
 
 
 @app.route("/logout")
