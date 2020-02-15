@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+    <div class="center">
+        <h1>User Search</h1>
+        <p>Search for any user on the web app.</p>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                {% for message in messages %}
+                    <p class="error">{{ message }}</p>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <form action="{{ url_for('search') }}" method="post">
+            {{ form.csrf_token }}
+
+            <p>
+                {{ form.username(placeholder="Username") }}
+            </p>
+
+            <p>
+                {{ form.class_id(placeholder="Class ID") }}
+            </p>
+
+            <p>
+                {{ form.forename(placeholder="Forename") }}
+            </p>
+
+            <p>
+                {{ form.surname(placeholder="Surname") }}
+            </p>
+
+            <p>
+                {{ form.submit() }}
+            </p>
+        </form>
+
+        {{ students|safe }}
+    </div>
+
+{% endblock %}

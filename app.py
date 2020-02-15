@@ -6,28 +6,23 @@ import time
 import traceback
 from datetime import timedelta
 from operator import itemgetter
-from urllib.parse import urlparse, urlencode
-from urllib.request import urlretrieve
+from urllib.parse import urlparse
 import xlrd
 import requests
 import validators
 from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
 import mysql.connector
 from flask_mail import Mail, Message
-from flask_wtf import FlaskForm, CSRFProtect
+from flask_wtf import CSRFProtect
 from libgravatar import Gravatar
 from mysql.connector import errorcode
-from socket import inet_aton, inet_ntoa
+from socket import inet_aton
 from flask_bcrypt import Bcrypt
 import onetimepass
 from werkzeug.exceptions import HTTPException, NotFound
-
 from forms import *
 from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError, InvalidUser
 from defaults import defaults
-import base64
-from wtforms import StringField, PasswordField, SubmitField, BooleanField, HiddenField
-from wtforms.validators import DataRequired, Length, EqualTo, NoneOf, InputRequired
 
 config = configparser.ConfigParser()
 config.read("config.ini")
@@ -264,7 +259,7 @@ def login():
     else:
         form = LoginForm()
         if form.validate_on_submit():
-            cursor.execute("SELECT `password`, `2fa` FROM `users` WHERE `username` = %s", [form.username.data])
+            cursor.execute("SELECT `password`, `2fa` FROM `users` WHERE `username` = %s", (form.username.data,))
             user = cursor.fetchone()
             if user is not None:  # If there is a user by the given username
                 hashed, secret = [user[i] for i in range(2)]
@@ -555,8 +550,8 @@ def timetable(username):
         abort(InvalidUser)
 
 
-@app.route("/timetables")
-def search_timetables():
+@app.route("/search", methods=["GET", "POST"])
+def search():
     logout = check_logout()
     if logout:
         if isinstance(logout, Bans):
@@ -565,30 +560,73 @@ def search_timetables():
             flash(logout)
             return redirect(url_for("login"))
     elif get_user_type() == 0:
-        return redirect(url_for("timetable_own"))
+        return error_handler(None, 403, "Students cannot access other students' information.")
     else:
         form = SearchForm()
         cursor.execute("SELECT `class_id` FROM `classes`")
-        form.classes.choices = [(c[0], c[0]) for c in cursor.fetchall()]
+        form.class_id.choices = [("*", "Classes")]
+        for c in cursor.fetchall():
+            form.class_id.choices.append((c[0], c[0]))
+
         if form.validate_on_submit():
-            if (form.surname.data or form.forename.data or form.username.data or form.classes.data) is None:
-                cursor.execute("SELECT `username` FROM `users` WHERE `type` = %s", (0,))
+            print()
+            if (form.surname.data or form.forename.data or form.username.data) == "" and form.class_id.data == "*":
+                cursor.execute("SELECT `username`, `type` FROM `users`")
             else:
-                statement = "SELECT `u`.`username` FROM `users` `u`"
+                statement = "SELECT `u`.`username`, `u`.`type` FROM `users` `u` "
                 where = "WHERE"
                 data = []
-                if form.classes.data is not None:
-                    statement += " INNER JOIN `userclasses` `c`"
-                    where += " `c`.`class_id` LIKE '%%s%'"
-                    data.append(form.classes.data)
-                    for i in range(1, len(form.classes.data)):
-                        where += " OR `c`.`class_id` LIKE '%%s%'"
-                if form.forename.data is not None and form.surname.data is not None:
-                    # TODO Finish this section
-                    where += f" `u`.`username` LIKE '4004{form.forename.data[:2]}{form.surname.data[:2]}__'"
-                if form.forename.data is not None:
-                    where +=
-                cursor.execute(statement, )
+                if form.class_id.data != "*":
+                    statement += "INNER JOIN `userclasses` `c` ON `c`.`username` = `u`.`username`"
+                    where += " `c`.`class_id` = %s"
+                    data.append(form.class_id.data)
+                if form.forename.data != "":
+                    if where != "WHERE":
+                        where += " AND"
+                    where += " `u`.`forename` LIKE CONCAT('%', %s, '%')"
+                    data.append(form.forename.data)
+                if form.surname.data != "":
+                    if where != "WHERE":
+                        where += " AND"
+                    where += " `u`.`surname` LIKE CONCAT('%', %s, '%')"
+                    data.append(form.surname.data)
+                if form.username.data != "":
+                    if where != "WHERE":
+                        where += " AND"
+                    where += " `u`.`username` LIKE CONCAT('%', %s, '%')"
+                    data.append(form.username.data)
+
+                cursor.execute(statement + where, tuple(data))
+
+            users = cursor.fetchall()
+            if users is None:
+                flash("No users found.")
+                students = ""
+            else:
+                students = "<h2>Results</h2><table>" # TODO: Make the table centered and be an actual table
+                for user in users:
+                    students += f"<tr><th>{user[0]}"
+
+                    if user[1] == 0:
+                        students += f" <a href='{url_for('timetable', username=user[0])}'>" \
+                                    f"<i class='fas fa-calendar-times'></i></a>"
+
+                    students += f" <a href='{url_for('profile', username=user[0])}><i class='fas fa-user'></i></a>"
+
+                    if has_permission(get_username(), "USERS_BAN"):
+                        students += f" <a href='{url_for('ban')}?user={user[0]}'><i class='fas fa-gavel'></i></a>"
+                    if has_permission(get_username(), "USERS_RESET"):
+                        students += f" <a href='{url_for('accounts_reset', username=user[0])}'>"
+                    if has_permission(get_username(), "USERS_BAN"):
+                        students += f"<i class='fas fa-user-lock'></i></a>"
+                    if has_permission(get_username(), "USERS_DELETE"):
+                        f" <a href='{url_for('accounts_delete')}'><i class='fas fa-trash-alt'></i></a>"
+
+                    students += "</th></tr>"
+
+            return render_template("search.html", title="User Search", form=form, students=students)
+        else:
+            return render_template("search.html", title="User Search", form=form, students="")
 
 
 @app.route("/logout")
@@ -667,6 +705,14 @@ def inject_userdata():
 
 
 # Utility functions
+def has_permission(username, permission):
+    cursor.execute("SELECT TRUE FROM `permissions` WHERE `username` = %s AND `perm_id` = %s", (username, permission))
+    if cursor.fetchone() is None:
+        return False
+    else:
+        return True
+
+
 def is_user(username):
     cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
     if cursor.fetchone() is None:
@@ -679,14 +725,12 @@ def get_tutor(username=None):
     if username is None:
         username = get_username()
 
-    cursor.execute("SELECT c.`class_id` FROM `userclasses` `c` INNER JOIN `users` `u` WHERE c.`username` = %s AND "
-                   "c.`class_id` REGEXP CONCAT(u.`year`, '\\.\\d')", (username,))
+    cursor.execute("SELECT c.`class_id` FROM `userclasses` `c` INNER JOIN `users` `u` ON c.`username` = u.`username` "
+                   "WHERE c.`username` = %s AND c.`class_id` REGEXP CONCAT(u.`year`, '\\.\\d')", (username,))
     data = cursor.fetchone()
     if data is None:
-        print("No tutor")
         return None
     else:
-        print(data[0])
         return data[0]
 
 
@@ -718,8 +762,8 @@ def get_useragent(full=False):
 
 def get_user_type(username=None):
     if username is None:
-        cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` WHERE `s`.`sess_id` = %s",
-                       (request.cookies.get("sessionID"),))
+        cursor.execute("SELECT `u`.`type` FROM `users` `u` INNER JOIN `sessions` `s` ON `u`.`username` = `s`.`username`"
+                       " WHERE `s`.`sess_id` = %s", (request.cookies.get("sessionID"),))
     else:
         cursor.execute("SELECT `type` FROM `users` WHERE `username` = %s", (username,))
 
@@ -733,7 +777,8 @@ def get_user_type(username=None):
 def get_userdata(username=None):
     if username is None:
         cursor.execute("SELECT u.`username`, u.`forename`, u.`surname`, u.`attendance`, u.`year` FROM `users` `u` "
-                       "INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
+                       "INNER JOIN `sessions` ON u.`username` = `sessions`.`username` WHERE `sessions`.`sess_id` = %s",
+                       (request.cookies.get("sessionID"),))
     else:
         cursor.execute("SELECT `username`, `forename`, `surname`, `attendance`, `year` FROM `users` WHERE `username` "
                        "= %s", (username,))
@@ -742,8 +787,8 @@ def get_userdata(username=None):
 
 
 def get_username():
-    cursor.execute("SELECT u.`username` FROM `users` `u` INNER JOIN `sessions` WHERE `sessions`.`sess_id` = %s",
-                   (request.cookies.get("sessionID"),))
+    cursor.execute("SELECT u.`username` FROM `users` `u` INNER JOIN `sessions` ON `sessions`.`username` = "
+                   "`u`.`username` WHERE `sessions`.`sess_id` = %s", (request.cookies.get("sessionID"),))
     data = cursor.fetchone()
     if data is None:
         return None
@@ -795,7 +840,7 @@ def check_logout():
         else:
             return "Session timed out."
     else:
-        return True
+        return "No existing session."
 
 
 def check_ban(ip, username):
@@ -859,5 +904,4 @@ def get_redirect(this):
 
 
 if __name__ == '__main__':
-    excel.init_excel(app)
     app.run(ssl_context="adhoc", host="0.0.0.0")

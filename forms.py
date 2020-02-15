@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from wtforms import SubmitField, StringField, PasswordField, HiddenField, BooleanField, SelectField
+from wtforms import SubmitField, StringField, PasswordField, HiddenField, BooleanField, SelectField, SelectMultipleField
 from wtforms.validators import DataRequired, Length, EqualTo, InputRequired
 
 
@@ -23,8 +23,10 @@ class RegisterConfirmForm(FlaskForm):
     password = PasswordField("Password", validators=[DataRequired(), Length(10, 72, message="Passwords must be "
                                                                                             "between 10 and 72 "
                                                                                             "characters long.")])
-    password_confirm = PasswordField("Confirm Password", validators=[DataRequired(), EqualTo("password",
-                                                                                             "Password and confirm password fields must be the same.")])
+    password_confirm = PasswordField("Confirm Password", validators=[DataRequired(),
+                                                                     EqualTo("password",
+                                                                             "Password and confirm password fields must"
+                                                                             " be the same.")])
     tfa = BooleanField("Setup Two Factor Authentication?", default=True)
     submit = SubmitField("Confirm")
 
@@ -43,4 +45,5 @@ class SearchForm(FlaskForm):
     username = StringField("Username")
     forename = StringField("Forename")
     surname = StringField("Surname")
-    classes = SelectField("Classes")
+    class_id = SelectField("Classes")
+    submit = SubmitField("Submit")
