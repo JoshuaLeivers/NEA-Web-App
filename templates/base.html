@@ -52,6 +52,8 @@
         {% endif %}
 
         <li style="float: right;"><span title="Light/Dark"><a href="{{ url_for('darkmode') }}?redirect={{ request.endpoint }}"><i class="fas fa-moon"></i></a></span></li>
+
+        <div style="float: right;">{% block navbar_right %}{% endblock %}</div>
     </ul>
 </div>
 

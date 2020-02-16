@@ -1,6 +1,7 @@
 import configparser
 import hashlib
 import os
+import re
 import secrets
 import time
 import traceback
@@ -10,7 +11,8 @@ from urllib.parse import urlparse
 import xlrd
 import requests
 import validators
-from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
+from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory, \
+    get_flashed_messages
 import mysql.connector
 from flask_mail import Mail, Message
 from flask_wtf import CSRFProtect
@@ -18,8 +20,9 @@ from libgravatar import Gravatar
 from mysql.connector import errorcode
 from socket import inet_aton
 from flask_bcrypt import Bcrypt
-import onetimepass
 from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.utils import escape
+
 from forms import *
 from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError, InvalidUser
 from defaults import defaults
@@ -241,6 +244,13 @@ def dashboard():
             flash(logout)
             return redirect("logout", 303)
     else:
+        cursor.execute("SELECT `anno_message`, `sender`, `anno_type` FROM `announcements` INNER JOIN `userannos` ON "
+                       "`userannos`.`anno_id` = `announcements`.`anno_id` WHERE `userannos`.`username` = %s",
+                       (get_username(),))
+        annos = cursor.fetchall()
+        if annos is not None:
+            for anno in annos:
+                flash("<b>" + anno[1] + "</b>: " + escape(anno[0]), category="announcement")
         if get_user_type() == 0:
             return render_template("dashboard_student.html", title="Dashboard")
         elif get_user_type() == 1:
@@ -272,14 +282,7 @@ def login():
                     resp.delete_cookie("sessionID")
                     return resp, 403
                 else:
-                    if not secret:
-                        return start_session(form.username.data, origin)
-                    else:
-                        if onetimepass.valid_totp(form.token.data, secret):
-                            return start_session(form.username.data, origin)
-                        else:
-                            flash("Invalid 2FA Token.")
-                            return render_template("login.html", title="Sign In", form=form)
+                    return start_session(form.username.data, origin)
             else:
                 flash("Username or password is incorrect.")
                 resp = make_response(render_template("login.html", form=form, title="Sign In"))
@@ -306,7 +309,7 @@ def register():
         if form.validate_on_submit():
             cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-            username = form.username.data
+            username = form.username.data.lower()
             cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
             if not cursor.fetchall():
                 cursor.execute("SELECT TRUE FROM `requests` WHERE `req_ip` = %s", (get_ip(),))
@@ -328,8 +331,7 @@ def register():
 
                         url = url_for("register_confirm") + "?id=" + req_id
 
-                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"],
-                                      # TODO: Change to nuast.org when complete
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@nuast.com"],
                                       sender=("Student Portal", email["senders"]["accounts"]))
                         msg.html = f"""<h1>Confirm your student portal account</h1>
                         <p>Never share or forward this email or the links it contains! 
@@ -344,9 +346,8 @@ def register():
                         or your password once you have created your account.</p> 
                         <h3>Who requested this?</h3>
                         <p><b>IP</b>: {request.remote_addr} 
-                        {(request.remote_addr in limits["exemptions"]["ips"]) and "<b>(NUAST)</b>"}</p> 
-                        <p><b>Browser</b>: {request.user_agent.browser} {request.user_agent.version}</p>
-                        <p><b>Operating System</b>: {request.user_agent.platform}"""  # TODO: Get test for exemption to work correctly
+                        {limits["exemptions"]["ips"].get(request.remote_addr) or ''}</p> 
+                        <p><b>Browser</b>: {request.user_agent.browser} {request.user_agent.version}</p>"""
 
                         mail.send(msg)
 
@@ -401,8 +402,14 @@ def register_confirm():
                         else:
                             cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
                                            (username, bcrypt.generate_password_hash(password)))
-                            return start_session(username, "register_confirm",
-                                                 (form.tfa.data and url_for("settings_tfa") or url_for("dashboard")))
+
+                            if re.search("^(4004[a-z][a-z]\d\d)", username):
+                                cursor.execute("UPDATE `users` SET `type` = 0, `year` = %s",
+                                               (int(re.sub("[^0-9]", "", username)[4:6]),))
+                            else:
+                                cursor.execute("UPDATE `users` SET `type` = 1")
+
+                            return start_session(username, "register_confirm", url_for("dashboard"))
             else:
                 if form.req_id.errors is None:
                     cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
@@ -431,6 +438,11 @@ def register_confirm():
                 return redirect(url_for("register_confirm_code")), 303
         else:
             return redirect(url_for("register_confirm_code")), 303
+
+
+@app.route("/passwordcriteria")
+def password_criteria():
+    return render_template("password_criteria.html")
 
 
 @app.route("/register/confirm/code", methods=["GET", "POST"])

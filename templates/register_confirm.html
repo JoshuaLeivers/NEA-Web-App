@@ -2,28 +2,11 @@
 
 {% block content %}
 
-    <h2>Confirm Registration</h2>
-
-    <p>To finish creating your account <code>{{ username }}</code>, set a strong password using the following criteria:
-    </p>
-    <ul>
-        <li>Between 10 and 72 characters</li>
-        <li>At least one of each of:
-            <ul>
-                <li>Uppercase letter</li>
-                <li>Lowercase letter</li>
-                <li>Number</li>
-                <li>Special character (e.g. '$', '&' or '!')</li>
-            </ul>
-        </li>
-    </ul>
-
-    <p>Your password will be checked against a database of breached passwords to ensure that you do not either reuse a
-        password, or use a very basic password.</p>
-
-    <form action="{{ url_for('register_confirm') }}" method="post">
+    <form action="{{ url_for('register_confirm') }}" method="post" class="center">
         <h1>Confirm Registration</h1>
-        <p>Set a password to create your new account.</p>
+        <p>Set a password to create your new account <b>{{ username }}</b>.</p>
+        <p>Your password must meet the criteria listed <a href="{{ url_for('password_criteria') }}" target="_blank">here</a>.</p>
+        <p>Your password will be checked against a database of leaked passwords.</p>
 
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -36,21 +19,11 @@
         {{ form.hidden_tag() }}
 
         <p>
-            {{ form.password.label }}
-            <br>
-            {{ form.password }}
+            {{ form.password(placeholder="Password") }}
         </p>
 
         <p>
-            {{ form.password_confirm.label }}
-            <br>
-            {{ form.password_confirm }}
-        </p>
-
-        <p>
-            {{ form.tfa.label }}
-            <br>
-            {{ form.tfa }}
+            {{ form.password_confirm(placeholder="Confirm Password") }}
         </p>
 
         <p>

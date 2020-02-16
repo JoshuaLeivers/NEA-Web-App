@@ -1,8 +1,14 @@
 {% extends "dashboard.html" %}
 
-{% block dashboard %}
+{% block navbar %}
 
-    <h2>Attendance</h2>
-    <h3>{{ attendance }}%</h3>
+    <li><a href="{{ url_for('profile_own') }}">Profile</a></li>
+    <li><a href="{{ url_for('timetable_own') }}">Timetable</a></li>
+
+{% endblock %}
+
+{% block navbar_right %}
+
+    <li><a href="{{ url_for('profile_own') }}">{{ username }}</a></li>
 
 {% endblock %}

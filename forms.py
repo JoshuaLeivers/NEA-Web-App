@@ -6,7 +6,6 @@ from wtforms.validators import DataRequired, Length, EqualTo, InputRequired
 class LoginForm(FlaskForm):
     username = StringField("Username", validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
-    token = StringField("Token")
     submit = SubmitField("Sign In")
 
 
@@ -27,18 +26,12 @@ class RegisterConfirmForm(FlaskForm):
                                                                      EqualTo("password",
                                                                              "Password and confirm password fields must"
                                                                              " be the same.")])
-    tfa = BooleanField("Setup Two Factor Authentication?", default=True)
     submit = SubmitField("Confirm")
 
 
 class RegisterConfirmCodeForm(FlaskForm):
     req_id = StringField("Code", validators=[DataRequired(), Length(64, 64)])
     submit = SubmitField("Confirm")
-
-
-class RegisterTFAForm(FlaskForm):
-    token = StringField("Token", validators=[DataRequired(), Length(6, 6)])
-    submit = SubmitField("Verify")
 
 
 class SearchForm(FlaskForm):

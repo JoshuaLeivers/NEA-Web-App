@@ -4,4 +4,13 @@
     <h1 style="text-align: center">Welcome, {{ forename or username }}</h1>
 
     {% block dashboard %}{% endblock %}
+
+    {% with messages = get_flashed_messages(category_filter=["announcement"]) %}
+        {% if messages %}
+            <h2>Announcements</h2>
+            {% for message in messages %}
+                <p>{{ message|safe }}</p>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
 {% endblock %}
