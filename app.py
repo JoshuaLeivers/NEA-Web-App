@@ -3,6 +3,7 @@ import hashlib
 import os
 import re
 import secrets
+import string
 import time
 import traceback
 from datetime import timedelta
@@ -331,7 +332,7 @@ def register():
 
                         url = url_for("register_confirm") + "?id=" + req_id
 
-                        msg = Message("Confirm Student Portal Account", recipients=[username + "@nuast.com"],
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"],
                                       sender=("Student Portal", email["senders"]["accounts"]))
                         msg.html = f"""<h1>Confirm your student portal account</h1>
                         <p>Never share or forward this email or the links it contains! 
@@ -345,8 +346,8 @@ def register():
                         anyway. Nobody can access your account without the links or code in this email, 
                         or your password once you have created your account.</p> 
                         <h3>Who requested this?</h3>
-                        <p><b>IP</b>: {request.remote_addr} 
-                        {limits["exemptions"]["ips"].get(request.remote_addr) or ''}</p> 
+                        <p><b>IP</b>: {request.remote_addr} <b>
+                        {limits["exemptions"]["ips"].get(request.remote_addr) or ''}</b></p> 
                         <p><b>Browser</b>: {request.user_agent.browser} {request.user_agent.version}</p>"""
 
                         mail.send(msg)
@@ -449,7 +450,7 @@ def password_criteria():
 def register_confirm_code():
     logout = check_logout()
     if not logout:
-        flash("You are already signed out.")
+        flash("You are already signed in.")
         return redirect(get_redirect("register_confirm_code"))
     elif isinstance(logout, Bans):
         return banned(logout)
@@ -824,6 +825,11 @@ def check_password_pwned(password):
 def check_password_invalid(password):
     if not 9 < len(password) < 73:
         return "Passwords must be between 10 and 72 characters in length."
+    elif not (any(char in password for char in string.ascii_lowercase) and
+              any(char in password for char in string.ascii_uppercase) and
+              any(char in password for char in string.digits) and
+              not any(char not in (string.ascii_letters + string.digits) for char in password)):
+        return "Password does not meet password criteria."
     elif check_password_pwned(password):
         return "Your password has been leaked in the past. If you have used this password elsewhere, change it " \
                "immediately to avoid your accounts being breached. "
