@@ -1,5 +1,17 @@
 {% extends "base.html" %}
 
+{% block navbar %}
+
+    <li><a href="{{ url_for('search') }}" class="active">Search</a></li>
+
+{% endblock %}
+
+{% block navbar_right %}
+
+    <li><a href="{{ url_for('profile_own') }}">{{ username }}</a></li>
+
+{% endblock %}
+
 {% block content %}
 
     <div class="center">

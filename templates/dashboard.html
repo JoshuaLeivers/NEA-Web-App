@@ -11,6 +11,14 @@
             {% for message in messages %}
                 <p>{{ message|safe }}</p>
             {% endfor %}
+        {% else %}
+            <h2>No Messages</h2>
         {% endif %}
     {% endwith %}
+{% endblock %}
+
+{% block navbar_right %}
+
+    <li><a href="{{ url_for('profile_own') }}">{{ username }}</a></li>
+
 {% endblock %}

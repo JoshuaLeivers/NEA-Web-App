@@ -2,13 +2,8 @@
 
 {% block navbar %}
 
-    <li><a href="{{ url_for('profile_own') }}">Profile</a></li>
     <li><a href="{{ url_for('timetable_own') }}">Timetable</a></li>
-
-{% endblock %}
-
-{% block navbar_right %}
-
-    <li><a href="{{ url_for('profile_own') }}">{{ username }}</a></li>
+    <li><a href="{{ url_for('homework_own') }}">Homework</a></li>
+    <li><a href="{{ url_for('detentions_own') }}">Detentions</a></li>
 
 {% endblock %}

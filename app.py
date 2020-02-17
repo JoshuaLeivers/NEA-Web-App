@@ -6,14 +6,13 @@ import secrets
 import string
 import time
 import traceback
-from datetime import timedelta
+from datetime import timedelta, datetime
 from operator import itemgetter
 from urllib.parse import urlparse
 import xlrd
 import requests
 import validators
-from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory, \
-    get_flashed_messages
+from flask import Flask, request, make_response, render_template, redirect, url_for, abort, flash, send_from_directory
 import mysql.connector
 from flask_mail import Mail, Message
 from flask_wtf import CSRFProtect
@@ -23,7 +22,6 @@ from socket import inet_aton
 from flask_bcrypt import Bcrypt
 from werkzeug.exceptions import HTTPException, NotFound
 from werkzeug.utils import escape
-
 from forms import *
 from errors import ConfigInvalidValueError, ConfigSectionError, ConfigOptionError, InvalidUser
 from defaults import defaults
@@ -245,6 +243,7 @@ def dashboard():
             flash(logout)
             return redirect("logout", 303)
     else:
+        cursor.execute("CALL ANNOUNCEMENTS_REMOVEOLD()")
         cursor.execute("SELECT `anno_message`, `sender`, `anno_type` FROM `announcements` INNER JOIN `userannos` ON "
                        "`userannos`.`anno_id` = `announcements`.`anno_id` WHERE `userannos`.`username` = %s",
                        (get_username(),))
@@ -270,10 +269,10 @@ def login():
     else:
         form = LoginForm()
         if form.validate_on_submit():
-            cursor.execute("SELECT `password`, `2fa` FROM `users` WHERE `username` = %s", (form.username.data,))
+            cursor.execute("SELECT `password` FROM `users` WHERE `username` = %s", (form.username.data,))
             user = cursor.fetchone()
             if user is not None:  # If there is a user by the given username
-                hashed, secret = [user[i] for i in range(2)]
+                hashed = user[0]
 
                 if hashed is None:  # If there is no password set for the user
                     return redirect(url_for("reset") + "?user=" + form.username.data, code=303)
@@ -332,7 +331,7 @@ def register():
 
                         url = url_for("register_confirm") + "?id=" + req_id
 
-                        msg = Message("Confirm Student Portal Account", recipients=[username + "@gmail.com"],
+                        msg = Message("Confirm Student Portal Account", recipients=[username + "@nuast.org"],
                                       sender=("Student Portal", email["senders"]["accounts"]))
                         msg.html = f"""<h1>Confirm your student portal account</h1>
                         <p>Never share or forward this email or the links it contains! 
@@ -379,14 +378,14 @@ def register_confirm():
             if form.validate_on_submit():
                 cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED(); CALL REQUESTS_REMOVEOLD();", multi=True)
 
-                cursor.execute("SELECT `req_username`, `req_time` FROM `requests` WHERE `req_id` = %s",
+                cursor.execute("SELECT `req_username` FROM `requests` WHERE `req_id` = %s",
                                (form.req_id.data,))
-                data = cursor.fetchone()
-                if not data:
+                username = cursor.fetchone()
+                if not username:
                     flash("Account creation request expired or invalid.")
                     return redirect(url_for("register"), 303)
                 else:
-                    username = data[0]
+                    username = username[0]
                     cursor.execute("SELECT TRUE FROM `users` WHERE `username` = %s", (username,))
                     if cursor.fetchone():
                         flash("The account '" + username + "' already exists.")
@@ -396,17 +395,16 @@ def register_confirm():
                         invalid = check_password_invalid(password)
                         if invalid:
                             flash(invalid)
-                            expires = data[1] + timedelta(minutes=30)
                             return render_template("register_confirm.html", title="Confirm Registration",
-                                                   username=username,
-                                                   expires=expires, form=form), 422
+                                                   username=username, form=form), 422
                         else:
                             cursor.execute("INSERT INTO `users` (`username`, `password`) VALUES (%s, %s)",
                                            (username, bcrypt.generate_password_hash(password)))
 
-                            if re.search("^(4004[a-z][a-z]\d\d)", username):
-                                cursor.execute("UPDATE `users` SET `type` = 0, `year` = %s",
-                                               (int(re.sub("[^0-9]", "", username)[4:6]),))
+                            if re.search("^(4004[a-z][a-z][a-z][a-z]\\d\\d)", username):
+                                cursor.execute("UPDATE `users` SET `type` = 0, `year` = %s WHERE `username = %s`",
+                                               (int(re.sub("[^0-9]", "", username)[4:6]) -
+                                                int(datetime.now().strftime("%y")) + 7, username))
                             else:
                                 cursor.execute("UPDATE `users` SET `type` = 1")
 
@@ -441,6 +439,71 @@ def register_confirm():
             return redirect(url_for("register_confirm_code")), 303
 
 
+@app.route("/detentions/")
+def detentions_own():
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    elif get_user_type() == 1:
+        return redirect(url_for("search"), 303)
+    else:
+        return detentions(get_username())
+
+
+@app.route("/detentions/<username>")
+def detentions(username):
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    elif is_user(username):
+        if get_username() == username or get_user_type() == 1:
+            table = f"<h1>Homework</h1><p>{username}@nuast.org</p>"
+            if get_user_type(username) == 0:
+                cursor.execute("SELECT `det_start`, `teacher`, `det_length`, `det_room`, `det_info` FROM `detentions` "
+                               "WHERE `student` = %s ORDER BY `det_start` DESC", (username,))
+
+                detentions = cursor.fetchall()
+                if detentions:
+                    table += "<table><tr><th>Start</th><th>Teacher</th><th>Length</th><th>Room</th><th>Info</th></tr>"
+
+                    for det in detentions:
+                        table += f"""<tr><th>{det[0]}</th><th>{det[1]}</th><th>{det[2]}</th><th>{det[3]}</th>
+<th>{det[4]}</th></tr>"""
+
+                    table += "</table>"
+                else:
+                    table += "<h3>No detentions available.</h3>"
+            else:
+                cursor.execute("SELECT `det_start`, `student`, `det_length`, `det_room`, `det_info` FROM `detentions` "
+                               "WHERE `teacher` = %s", (username,))
+
+                detentions = cursor.fetchall()
+                if detentions:
+                    table += "<table><tr><th>Start</th><th>Student</th><th>Length</th><th>Room</th><th>Info</th></tr>"
+
+                    for det in detentions:
+                        table += f"""<tr><th>{det[0]}</th><th><a href="{url_for("profile", username=det[1])}">{det[1]}
+</a></th><th>{det[2]}</th><th>{det[3]}</th><th>{det[4]}</th></tr>"""
+
+                    table += "</table>"
+                else:
+                    table += "<h3>No detentions available.</h3>"
+
+            return render_template("table.html", table=table)
+        else:
+            return error_handler(None, 403, "Students cannot view other users' detentions.")
+    else:
+        abort(InvalidUser)
+
+
 @app.route("/passwordcriteria")
 def password_criteria():
     return render_template("password_criteria.html")
@@ -471,7 +534,15 @@ def register_confirm_code():
 
 @app.route("/profile/")
 def profile_own():
-    return profile(get_username())
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    else:
+        return profile(get_username())
 
 
 @app.route("/profile/<username>")
@@ -515,6 +586,81 @@ def profile(username):
         abort(InvalidUser)
 
 
+@app.route("/homework/")
+def homework_own():
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    elif get_user_type(get_username()) == 1:
+        return redirect(url_for("search"), 303)
+    else:
+        return homework(get_username())
+
+
+@app.route("/homework/<username>")
+def homework(username):
+    logout = check_logout()
+    if logout:
+        if isinstance(logout, Bans):
+            return banned(logout)
+        else:
+            flash(logout)
+            return redirect(url_for("login"), 303)
+    elif is_user(username):
+        if get_username() == username or get_user_type() == 1:
+            table = f"<h1>Homework</h1><p>{username}@nuast.org</p>"
+            if get_user_type(username) == 0:
+                cursor.execute("SELECT h.`hwk_desc`, h.`teacher`, h.`hwk_set`, h.`hwk_due`, h.`hwk_info` FROM "
+                               "`homework` `h` INNER JOIN `hwkset` `s` ON `s`.`hwk_desc` = h.`hwk_desc` AND "
+                               "`s`.`teacher` = h.`teacher` AND `s`.`hwk_due` = h.`hwk_due` WHERE `s`.`student` = %s OR"
+                               " `s`.`class_id` IN (SELECT `class_id` FROM `userclasses` WHERE `username` = %s) ORDER "
+                               "BY `h`.`hwk_due` DESC", (username, username))
+
+                homework = cursor.fetchall()
+                if homework:
+                    table += "<table><tr><th>Description</th><th>Teacher</th><th>Set</th><th>Due</th><th>Info</th></tr>"
+
+                    for hwk in homework:
+                        table += f"""<tr><th>{hwk[0]}</th><th>{hwk[1]}</th><th>{hwk[2]}</th><th>{hwk[3]}</th>
+<th>{hwk[4]}</th></tr>"""
+
+                    table += "</table>"
+                else:
+                    table += "<h3>No homework available.</h3>"
+            else:
+                cursor.execute("SELECT h.`hwk_desc`, h.`hwk_set`, h.`hwk_due`, h.`hwk_info`, s.`class_id`, s.`student`"
+                               " FROM `homework` `h` LEFT JOIN `hwkset` `s` ON `h`.`hwk_desc` = `s`.`hwk_desc` AND "
+                               "`h`.`teacher` = `s`.`teacher` AND `h`.`hwk_due` = `s`.`hwk_due` WHERE "
+                               "`h`.`teacher` = %s", (username,))
+
+                homework = cursor.fetchall()
+                if homework:
+                    table += "<table><tr><th>Description</th><th>Set</th><th>Due</th><th>Info</th><th>Class/Student" \
+                             "</th></tr>"
+
+                    for hwk in homework:
+                        table += f"<tr><th>{hwk[0]}</th><th>{hwk[1]}</th><th>{hwk[2]}</th><th>{hwk[3]}</th><th>"
+                        if hwk[4] is None:
+                            table += hwk[5]
+                        else:
+                            table += hwk[4]
+                        table += "</th></tr>"
+
+                    table += "</table>"
+                else:
+                    table += "<h3>No homework available.</h3>"
+
+            return render_template("table.html", table=table)
+        else:
+            return error_handler(None, 403, "Students cannot view other users' homework.")
+    else:
+        abort(InvalidUser)
+
+
 @app.route("/timetable/")
 def timetable_own():
     logout = check_logout()
@@ -525,7 +671,7 @@ def timetable_own():
             flash(logout)
             return redirect(url_for("login"), 303)
     elif get_user_type() == 1:
-        return redirect(url_for("search_timetables"), 303)
+        return redirect(url_for("search"), 303)
     else:
         return timetable(get_username())
 
@@ -546,12 +692,11 @@ def timetable(username):
                 if os.path.isfile(path):
                     sheet = xlrd.open_workbook(path).sheet_by_index(0)
 
-                    timetable = f"""<table>
+                    table = f"""<h1>Timetable</h1><p>{username}@nuast.org</p><table>
                     {"".join(("<tr>" + "".join(("<th>" + str(sheet.cell_value(y, x)) + "</th>") for x in range(sheet.ncols)) + "</tr>") for y in range(sheet.nrows))}
                     </table>"""
 
-                    return render_template("timetable.html", timetable=timetable, profile_username=username,
-                                           name=get_name(username))
+                    return render_template("table.html", table=table)
                 else:
                     return error_handler(None, 503, "The timetable you are looking for has not been uploaded yet. "
                                                     "Please try again later.")
@@ -616,24 +761,16 @@ def search():
                 flash("No users found.")
                 students = ""
             else:
-                students = "<h2>Results</h2><table>" # TODO: Make the table centered and be an actual table
+                students = "<h2>Results</h2><table>"
                 for user in users:
                     students += f"<tr><th>{user[0]}"
 
                     if user[1] == 0:
-                        students += f" <a href='{url_for('timetable', username=user[0])}'>" \
-                                    f"<i class='fas fa-calendar-times'></i></a>"
+                        students += f""" <a href='{url_for('timetable', username=user[0])}'><i class='fas fa-calendar
+-times'></i></a> <a href="{url_for("detentions", username=user[0])}"><i class="fas fa-gavel"></i></a> <a href="{
+                        url_for("homework", username=user[0])}"><i class="fas fa-clipboard-list"></i></a>"""
 
                     students += f" <a href='{url_for('profile', username=user[0])}><i class='fas fa-user'></i></a>"
-
-                    if has_permission(get_username(), "USERS_BAN"):
-                        students += f" <a href='{url_for('ban')}?user={user[0]}'><i class='fas fa-gavel'></i></a>"
-                    if has_permission(get_username(), "USERS_RESET"):
-                        students += f" <a href='{url_for('accounts_reset', username=user[0])}'>"
-                    if has_permission(get_username(), "USERS_BAN"):
-                        students += f"<i class='fas fa-user-lock'></i></a>"
-                    if has_permission(get_username(), "USERS_DELETE"):
-                        f" <a href='{url_for('accounts_delete')}'><i class='fas fa-trash-alt'></i></a>"
 
                     students += "</th></tr>"
 
@@ -673,9 +810,7 @@ def banned(bans):
     if any(ban["visible"] == 0 for ban in bans.bans):
         abort(500)
     elif any(ban["visible"] == 51 for ban in bans.bans):
-        bans = sorted(bans, key=itemgetter("username"))
-        return make_response(render_template("banned_legal.html",
-                                             ban=next(ban for ban in bans if ban["visible"] == 51)), 451)
+        abort(451)
     else:
         ban = sorted(bans, key=itemgetter("visible"))[0]
         if ban["visible"] < 5:
@@ -686,7 +821,7 @@ def banned(bans):
                     if ban["visible"] < 2:
                         ban["start"] = None
 
-        return render_template("err_banned.html", ban=ban), 403
+        return render_template("banned.html", ban=ban), 403
 
 
 # Error Handling
@@ -825,10 +960,9 @@ def check_password_pwned(password):
 def check_password_invalid(password):
     if not 9 < len(password) < 73:
         return "Passwords must be between 10 and 72 characters in length."
-    elif not (any(char in password for char in string.ascii_lowercase) and
-              any(char in password for char in string.ascii_uppercase) and
+    elif not (any(char in password for char in string.ascii_letters) and
               any(char in password for char in string.digits) and
-              not any(char not in (string.ascii_letters + string.digits) for char in password)):
+              any(char not in (string.ascii_letters + string.digits) for char in password)):
         return "Password does not meet password criteria."
     elif check_password_pwned(password):
         return "Your password has been leaked in the past. If you have used this password elsewhere, change it " \

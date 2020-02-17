@@ -1,4 +1,4 @@
-{% extends "profile.html" %}
+{% extends "base.html" %}
 
 {% block navbar %}
 
@@ -8,16 +8,18 @@
 
 {% endblock %}
 
-{% block profile %}
+{% block navbar_right %}
 
-    <div style="text-align: center">
-        <h4>Student{{ profile_year }}</h4>
-        <p>{{ tutor }}</p>
+    <li><a href="{{ url_for('profile_own') }}">{{ username }}</a></li>
+
+{% endblock %}
+
+{% block content %}
+
+    <div class="center">
+
+    {{ table|safe }}
+
     </div>
-
-    <p>{{ profile_attendance }}</p>
-
-    <h4>Classes</h4>
-    {{ classes }}
 
 {% endblock %}
