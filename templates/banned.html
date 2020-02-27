@@ -2,6 +2,8 @@
 
 {% block content %}
 
+    <div class="center">
+
     <h1>Access Denied</h1>
     <p>You have been blocked from accessing the web app.</p>
 
@@ -9,5 +11,7 @@
     <p><b>Admin</b>: {{ ban["admin"] }}</p>
     <p><b>Start</b>: {{ ban["start"] }}</p>
     <p><b>End</b>: {{ ban["end"] }}</p>
+
+    </div>
 
 {% endblock %}

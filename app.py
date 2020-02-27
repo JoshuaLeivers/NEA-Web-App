@@ -229,7 +229,7 @@ def avatar(username):
             else:
                 return error_handler(None, 403, "You cannot access other users' avatars.")
         else:
-            abort(InvalidUser)
+            raise InvalidUser
 
 
 @app.route("/")
@@ -402,7 +402,7 @@ def register_confirm():
                                            (username, bcrypt.generate_password_hash(password)))
 
                             if re.search("^(4004[a-z][a-z][a-z][a-z]\\d\\d)", username):
-                                cursor.execute("UPDATE `users` SET `type` = 0, `year` = %s WHERE `username = %s`",
+                                cursor.execute("UPDATE `users` SET `type` = 0, `year` = %s WHERE `username` = %s",
                                                (int(re.sub("[^0-9]", "", username)[4:6]) -
                                                 int(datetime.now().strftime("%y")) + 7, username))
                             else:
@@ -501,7 +501,7 @@ def detentions(username):
         else:
             return error_handler(None, 403, "Students cannot view other users' detentions.")
     else:
-        abort(InvalidUser)
+        raise InvalidUser
 
 
 @app.route("/passwordcriteria")
@@ -583,7 +583,7 @@ def profile(username):
         else:
             return error_handler(None, 403, "You cannot access other users' profiles.")
     else:
-        abort(InvalidUser)
+        raise InvalidUser
 
 
 @app.route("/homework/")
@@ -658,7 +658,7 @@ def homework(username):
         else:
             return error_handler(None, 403, "Students cannot view other users' homework.")
     else:
-        abort(InvalidUser)
+        raise InvalidUser
 
 
 @app.route("/timetable/")
@@ -705,7 +705,7 @@ def timetable(username):
         else:
             return error_handler(None, 403, "Students cannot view other users' timetables.")
     else:
-        abort(InvalidUser)
+        raise InvalidUser
 
 
 @app.route("/search", methods=["GET", "POST"])
@@ -807,9 +807,9 @@ def darkmode():
 
 def banned(bans):
     bans = bans.bans
-    if any(ban["visible"] == 0 for ban in bans.bans):
+    if any(ban["visible"] == 0 for ban in bans):
         abort(500)
-    elif any(ban["visible"] == 51 for ban in bans.bans):
+    elif any(ban["visible"] == 51 for ban in bans):
         abort(451)
     else:
         ban = sorted(bans, key=itemgetter("visible"))[0]
@@ -825,11 +825,14 @@ def banned(bans):
 
 
 # Error Handling
-@app.errorhandler(HTTPException)
+@app.errorhandler(Exception)
 def error_handler(error, code=None, description=None):
-    code = code or error.code
-    description = description or error.description
-    return render_template("error.html", code=code, description=description), code
+    if isinstance(error, HTTPException):
+        code = code or error.code
+        description = description or error.description
+        return render_template("error.html", code=code, description=description), code
+    else:
+        abort(500)
 
 
 # Registering Custom HTTP Exceptions
@@ -980,9 +983,10 @@ def check_logout():
         session = cursor.fetchone()
         if session:
             bans = check_ban(get_ip(), session[0])
+            print(bans[0])
             if bans:
-                cursor.execute("DELETE FROM sessions WHERE username=%s", session[0])
-                return bans
+                cursor.execute("DELETE FROM sessions WHERE username=%s", (session[0],))
+                return Bans(bans=bans)
             else:
                 if session[1] != get_ip() or session[2] != get_useragent():
                     cursor.execute("DELETE FROM `sessions` WHERE `sess_id` = %s", (cookies.get("sessionID"),))
@@ -999,10 +1003,9 @@ def check_ban(ip, username):
     cursor.execute("CALL BANS_REMOVEOLD(); CALL ETC_REMOVEBANNED();", multi=True)
 
     cursor.execute("SELECT `username`, `ban_ip`, `staff`, `ban_visible`, `ban_reason`, `ban_start`, "
-                   "`ban_end` FROM bans WHERE `ban_start` < NOW() AND `ban_end` > NOW() AND ((`ban_ip`=%s "
-                   "AND `username`=%s) OR (`ban_ip` IS NULL and `username`=%s) OR (`ban_ip`=%s AND "
-                   "`username` IS NULL))", (ip, username, username, ip))
+                   "`ban_end` FROM bans WHERE `ban_start` <= NOW()")
     banlist = cursor.fetchall()
+    print(banlist[0])
 
     if banlist is not None:
         bans = []
@@ -1024,7 +1027,7 @@ def check_ban(ip, username):
 
 
 def start_session(username, origin, target=None):
-    bans = check_ban(get_ip(), username)
+    bans = Bans(bans=check_ban(get_ip(), username))
     if bans:
         return banned(bans)
     else:
